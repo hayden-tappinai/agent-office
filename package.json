@@ -11,13 +11,11 @@
     "@elevenlabs/react": "^0.14.2",
     "next": "latest",
     "react": "latest",
-    "react-dom": "latest",
-    "ws": "^8.19.0"
+    "react-dom": "latest"
   },
   "devDependencies": {
     "@types/node": "latest",
     "@types/react": "latest",
-    "@types/ws": "^8.18.1",
     "typescript": "latest"
   }
 }
