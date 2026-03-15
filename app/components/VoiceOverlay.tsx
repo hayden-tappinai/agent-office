@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useScribe, CommitStrategy } from "@elevenlabs/react";
 
 // ─── Constants ──────────────────────────────────────────────────
-const SCRIBE_WS_URL = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
 const SENTENCE_REGEX = /[^.!?]*[.!?]+/g;
-const GROWTH_THRESHOLD = 40; // chars of new content before checking for sentences
+const GROWTH_THRESHOLD = 40;
 const MIN_CHUNK_LENGTH = 10;
-const CONTEXT_WINDOW_SIZE = 4; // rolling context of last N committed chunks
+const CONTEXT_WINDOW_SIZE = 4;
 
 // ─── Hook: useScribeVoice ───────────────────────────────────────
 function useScribeVoice(onChunk: (text: string, context: string[]) => void) {
@@ -16,17 +16,9 @@ function useScribeVoice(onChunk: (text: string, context: string[]) => void) {
   const [interim, setInterim] = useState("");
   const [hearingSpeech, setHearingSpeech] = useState(false);
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
-  const processorNodeRef = useRef<ScriptProcessorNode | null>(null);
-
-  // Chunking state
   const lastProcessedLengthRef = useRef(0);
   const processedSentencesRef = useRef<Set<string>>(new Set());
   const contextBufferRef = useRef<string[]>([]);
-  const partialTextRef = useRef("");
   const vadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const onChunkRef = useRef(onChunk);
@@ -41,7 +33,6 @@ function useScribeVoice(onChunk: (text: string, context: string[]) => void) {
     const context = [...contextBufferRef.current];
     onChunkRef.current(trimmed, context);
 
-    // Push to rolling context
     contextBufferRef.current.push(trimmed);
     if (contextBufferRef.current.length > CONTEXT_WINDOW_SIZE) {
       contextBufferRef.current.shift();
@@ -56,173 +47,76 @@ function useScribeVoice(onChunk: (text: string, context: string[]) => void) {
     }
   }, [emitChunk]);
 
+  const scribe = useScribe({
+    modelId: "scribe_v2_realtime",
+    commitStrategy: CommitStrategy.VAD,
+    onPartialTranscript: (data) => {
+      const text = (data.text || "").trim();
+      if (!text) return;
+
+      setInterim(text);
+      setHearingSpeech(true);
+
+      if (vadTimerRef.current) clearTimeout(vadTimerRef.current);
+      vadTimerRef.current = setTimeout(() => setHearingSpeech(false), 1500);
+
+      if (text.length > lastProcessedLengthRef.current + GROWTH_THRESHOLD) {
+        processSentences(text);
+        lastProcessedLengthRef.current = text.length;
+      }
+    },
+    onCommittedTranscript: (data) => {
+      const text = (data.text || "").trim();
+      setInterim("");
+      lastProcessedLengthRef.current = 0;
+
+      if (text.length >= MIN_CHUNK_LENGTH) {
+        emitChunk(text);
+      }
+    },
+  });
+
   const start = useCallback(async () => {
-    if (wsRef.current) return;
+    if (listening || connecting) return;
     setConnecting(true);
 
     try {
-      // 1. Get mic access
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 16000,
-        },
-      });
-      mediaStreamRef.current = stream;
+      // Request mic permission
+      await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      // 2. Get single-use token from our API route
+      // Get token from our API route
       const tokenRes = await fetch("/api/scribe-token", { method: "POST" });
       const tokenData = await tokenRes.json();
       if (!tokenData.token) {
         throw new Error(tokenData.error || "Failed to get scribe token");
       }
 
-      // 3. Connect to Scribe WebSocket
-      const ws = new WebSocket(SCRIBE_WS_URL);
-      wsRef.current = ws;
+      // Connect via useScribe — handles audio capture, WebSocket, VAD
+      await scribe.connect({
+        token: tokenData.token,
+        microphone: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
 
-      ws.onopen = () => {
-        // Send config message
-        ws.send(JSON.stringify({
-          type: "config",
-          token: tokenData.token,
-          model_id: "scribe_v2_realtime",
-          language_code: "en",
-          commit_strategy: "vad",
-        }));
-
-        // Reset chunking state
-        lastProcessedLengthRef.current = 0;
-        processedSentencesRef.current.clear();
-        partialTextRef.current = "";
-
-        setListening(true);
-        setConnecting(false);
-
-        // Start streaming audio
-        startAudioCapture(stream, ws);
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-
-          if (msg.type === "partial_transcript" || msg.type === "transcript") {
-            const text = (msg.text || "").trim();
-            if (!text) return;
-
-            if (msg.type === "partial_transcript") {
-              partialTextRef.current = text;
-              setInterim(text);
-              setHearingSpeech(true);
-
-              // Reset VAD silence timer
-              if (vadTimerRef.current) clearTimeout(vadTimerRef.current);
-              vadTimerRef.current = setTimeout(() => setHearingSpeech(false), 1500);
-
-              // Check for sentences in partial if enough growth
-              if (text.length > lastProcessedLengthRef.current + GROWTH_THRESHOLD) {
-                processSentences(text);
-                lastProcessedLengthRef.current = text.length;
-              }
-            } else if (msg.type === "transcript") {
-              // Committed transcript from VAD
-              setInterim("");
-              partialTextRef.current = "";
-              lastProcessedLengthRef.current = 0;
-
-              if (text.length >= MIN_CHUNK_LENGTH) {
-                emitChunk(text);
-              }
-            }
-          }
-        } catch {
-          // ignore parse errors
-        }
-      };
-
-      ws.onerror = (e) => {
-        console.warn("[Scribe] WebSocket error:", e);
-      };
-
-      ws.onclose = () => {
-        setListening(false);
-        setConnecting(false);
-        setHearingSpeech(false);
-        wsRef.current = null;
-      };
+      lastProcessedLengthRef.current = 0;
+      processedSentencesRef.current.clear();
+      setListening(true);
     } catch (err) {
       console.warn("[Scribe] Start error:", err);
+    } finally {
       setConnecting(false);
-      cleanup();
     }
-  }, [emitChunk, processSentences]);
-
-  const startAudioCapture = useCallback((stream: MediaStream, ws: WebSocket) => {
-    try {
-      const audioCtx = new AudioContext({ sampleRate: 16000 });
-      audioContextRef.current = audioCtx;
-      const source = audioCtx.createMediaStreamSource(stream);
-
-      // Use ScriptProcessorNode (widely supported) for PCM capture
-      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-      processorNodeRef.current = processor;
-
-      processor.onaudioprocess = (e) => {
-        if (ws.readyState !== WebSocket.OPEN) return;
-
-        const inputData = e.inputBuffer.getChannelData(0);
-        // Convert Float32 -> Int16 PCM
-        const pcm16 = new Int16Array(inputData.length);
-        for (let i = 0; i < inputData.length; i++) {
-          const s = Math.max(-1, Math.min(1, inputData[i]));
-          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-        }
-
-        // Send as base64 audio chunk
-        const bytes = new Uint8Array(pcm16.buffer);
-        const base64 = btoa(String.fromCharCode(...bytes));
-        ws.send(JSON.stringify({
-          type: "audio",
-          audio: base64,
-        }));
-      };
-
-      source.connect(processor);
-      processor.connect(audioCtx.destination);
-    } catch (err) {
-      console.warn("[Scribe] Audio capture error:", err);
-    }
-  }, []);
-
-  const cleanup = useCallback(() => {
-    if (vadTimerRef.current) {
-      clearTimeout(vadTimerRef.current);
-      vadTimerRef.current = null;
-    }
-    if (processorNodeRef.current) {
-      processorNodeRef.current.disconnect();
-      processorNodeRef.current = null;
-    }
-    if (workletNodeRef.current) {
-      workletNodeRef.current.disconnect();
-      workletNodeRef.current = null;
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close().catch(() => {});
-      audioContextRef.current = null;
-    }
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
-      mediaStreamRef.current = null;
-    }
-  }, []);
+  }, [listening, connecting, scribe]);
 
   const stop = useCallback(() => {
-    // Flush remaining partial text
-    const remaining = partialTextRef.current.trim();
+    // Flush remaining partial text before disconnecting
+    const remaining = scribe.partialTranscript?.trim();
+
+    scribe.disconnect();
+
     if (remaining && remaining.length >= MIN_CHUNK_LENGTH) {
       const sentences = remaining.match(SENTENCE_REGEX);
       if (sentences) {
@@ -234,22 +128,17 @@ function useScribeVoice(onChunk: (text: string, context: string[]) => void) {
       }
     }
 
-    // Close WebSocket
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
+    if (vadTimerRef.current) {
+      clearTimeout(vadTimerRef.current);
+      vadTimerRef.current = null;
     }
 
-    cleanup();
-
-    // Reset state
-    partialTextRef.current = "";
     lastProcessedLengthRef.current = 0;
     processedSentencesRef.current.clear();
     setListening(false);
     setInterim("");
     setHearingSpeech(false);
-  }, [cleanup, emitChunk]);
+  }, [scribe, emitChunk]);
 
   const toggle = useCallback(() => {
     if (listening || connecting) stop();
@@ -480,10 +369,8 @@ export default function VoiceOverlay({
         setTimeout(() => setLastFinal(""), 600);
       }, 5000);
 
-      // Notify canvas that WIRE is thinking
       onWireThinking(true, text);
 
-      // POST to /api/voice with rolling context
       try {
         const res = await fetch("/api/voice", {
           method: "POST",
@@ -498,7 +385,6 @@ export default function VoiceOverlay({
         console.warn("[Voice] Fetch error:", err);
       }
 
-      // Clear thinking after a reasonable delay
       setTimeout(() => onWireThinking(false), 15000);
     },
     [onWireThinking]
@@ -507,7 +393,6 @@ export default function VoiceOverlay({
   const { listening, connecting, interim, hearingSpeech, toggle } =
     useScribeVoice(handleChunk);
 
-  // Show transcript area when interim text appears
   useEffect(() => {
     if (interim) {
       setTranscriptVisible(true);

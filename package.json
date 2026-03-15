@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@elevenlabs/react": "^0.14.2",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
