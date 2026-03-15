@@ -1,16 +1,18 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Agent Office — WHYRE HQ",
-  description: "A pixel art virtual office for 10 AI agents",
+  title: "WHYRE Agent Office",
+  description: "Pixel art virtual office — TappinAI's 10-agent team",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html lang="en">
-      <body style={{ margin: 0, padding: 0, background: "#0a0a0a", overflow: "hidden" }}>
-        {children}
-      </body>
+      <body style={{ margin: 0, padding: 0 }}>{children}</body>
     </html>
   );
 }

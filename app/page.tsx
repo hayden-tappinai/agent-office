@@ -1,571 +1,482 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
 
-// ─── Constants ───
-const TILE = 16;
-const COLS = 60;
-const ROWS = 40;
-const W = COLS * TILE;
-const H = ROWS * TILE;
-const SCALE = typeof window !== "undefined" ? Math.min(window.innerWidth / W, window.innerHeight / H, 2) : 1;
+import { useEffect, useRef, useState, useCallback } from "react";
 
-// ─── Colors ───
-const C = {
-  wall: "#2d2d44",
-  wallTop: "#3d3d5c",
-  floor: "#4a4a6a",
-  floorAlt: "#52527a",
-  carpet: "#5c3d6e",
-  carpetAlt: "#6b4d7e",
-  desk: "#8b6914",
-  deskTop: "#a07828",
-  monitor: "#1a1a2e",
-  monitorScreen: "#00ff88",
-  monitorScreenBlue: "#4488ff",
-  monitorScreenPurple: "#aa44ff",
-  chair: "#444466",
-  coffee: "#8B4513",
-  coffeeTop: "#654321",
-  whiteboard: "#e8e8e8",
-  whiteboardFrame: "#888888",
-  bookshelf: "#654321",
-  bookColor1: "#cc3333",
-  bookColor2: "#3366cc",
-  bookColor3: "#33aa33",
-  bookColor4: "#cc9933",
-  filing: "#667788",
-  filingHandle: "#aabbcc",
-  mailSlot: "#997755",
-  designWall: "#555577",
-  studioLight: "#ffdd44",
-  camera: "#333344",
-  plant: "#228833",
-  plantPot: "#885533",
-  meetingTable: "#6b5b3a",
-  rug: "#6b3a4a",
-  rugAlt: "#7b4a5a",
-};
+// ─── Types ──────────────────────────────────────────────────────
+interface Vec2 {
+  x: number;
+  y: number;
+}
 
-// ─── Agent Definitions ───
-interface AgentDef {
+interface Station {
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  color: string;
+  label: string;
+}
+
+interface Agent {
   id: string;
   name: string;
-  emoji: string;
   role: string;
-  homeX: number;
-  homeY: number;
-  sprite: string;
-}
-
-const AGENTS: AgentDef[] = [
-  { id: "wire", name: "WIRE", emoji: "⚡", role: "CEO — Command & Delegation", homeX: 29, homeY: 19, sprite: "/sprites/wire.png" },
-  { id: "code", name: "CODE", emoji: "💻", role: "Builder — Ships Features & PRs", homeX: 8, homeY: 8, sprite: "/sprites/code.png" },
-  { id: "hunt", name: "HUNT", emoji: "🔍", role: "Scout — Research & Investigation", homeX: 45, homeY: 12, sprite: "/sprites/hunt.png" },
-  { id: "snap", name: "SNAP", emoji: "📸", role: "Media — Screenshots & Video Gen", homeX: 52, homeY: 30, sprite: "/sprites/snap.png" },
-  { id: "plan", name: "PLAN", emoji: "📋", role: "Strategist — Planning & Scheduling", homeX: 42, homeY: 5, sprite: "/sprites/plan.png" },
-  { id: "eyes", name: "EYES", emoji: "👀", role: "Critic — Code Review & QA", homeX: 8, homeY: 18, sprite: "/sprites/eyes.png" },
-  { id: "sage", name: "SAGE", emoji: "🧠", role: "Advisor — Architecture & Strategy", homeX: 52, homeY: 6, sprite: "/sprites/sage.png" },
-  { id: "mail", name: "MAIL", emoji: "📬", role: "Comms — Email & Outreach", homeX: 8, homeY: 30, sprite: "/sprites/mail.png" },
-  { id: "memo", name: "MEMO", emoji: "📝", role: "Scribe — Memory & Documentation", homeX: 20, homeY: 30, sprite: "/sprites/memo.png" },
-  { id: "look", name: "LOOK", emoji: "🎨", role: "Designer — UI/UX & Design System", homeX: 35, homeY: 30, sprite: "/sprites/look.png" },
-];
-
-// Shared areas agents can visit
-const SHARED_AREAS = [
-  { name: "Coffee", x: 28, y: 4 },
-  { name: "Meeting", x: 28, y: 28 },
-  { name: "Whiteboard", x: 42, y: 5 },
-  { name: "Lounge", x: 30, y: 14 },
-  { name: "Water Cooler", x: 20, y: 14 },
-];
-
-// ─── Office Map (procedural) ───
-function drawOffice(ctx: CanvasRenderingContext2D) {
-  // Floor
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      ctx.fillStyle = (r + c) % 2 === 0 ? C.floor : C.floorAlt;
-      ctx.fillRect(c * TILE, r * TILE, TILE, TILE);
-    }
-  }
-
-  // Walls (top and sides)
-  ctx.fillStyle = C.wall;
-  ctx.fillRect(0, 0, W, TILE * 2);
-  ctx.fillRect(0, 0, TILE * 2, H);
-  ctx.fillRect(W - TILE * 2, 0, TILE * 2, H);
-  ctx.fillRect(0, H - TILE * 2, W, TILE * 2);
-  // Wall highlight
-  ctx.fillStyle = C.wallTop;
-  ctx.fillRect(0, TILE, W, 2);
-  ctx.fillRect(TILE, 0, 2, H);
-  ctx.fillRect(W - TILE - 2, 0, 2, H);
-  ctx.fillRect(0, H - TILE - 2, W, 2);
-
-  // ── Carpet areas ──
-  drawCarpet(ctx, 25, 25, 12, 10); // meeting room
-  drawCarpet(ctx, 25, 11, 12, 8);  // center lounge
-
-  // ── CODE's desk (top-left area) ──
-  drawDesk(ctx, 6, 6, 2, true);
-  drawDesk(ctx, 6, 8, 2, true); // dual monitors
-  drawMonitor(ctx, 6, 6, C.monitorScreen);
-  drawMonitor(ctx, 6, 8, C.monitorScreenBlue);
-  drawChair(ctx, 8, 7);
-
-  // ── EYES' review station (left middle) ──
-  drawDesk(ctx, 6, 16, 2, true);
-  drawDesk(ctx, 6, 18, 2, true);
-  drawDesk(ctx, 6, 20, 2, true);
-  drawMonitor(ctx, 6, 16, C.monitorScreenPurple);
-  drawMonitor(ctx, 6, 18, C.monitorScreen);
-  drawMonitor(ctx, 6, 20, C.monitorScreenBlue);
-  drawChair(ctx, 8, 18);
-
-  // ── MAIL corner (bottom-left) ──
-  drawMailStation(ctx, 5, 28);
-
-  // ── MEMO filing area (bottom-center-left) ──
-  drawFilingCabinets(ctx, 18, 28);
-
-  // ── WIRE's command desk (center) ──
-  drawDesk(ctx, 27, 17, 6, false);
-  drawMonitor(ctx, 28, 17, C.monitorScreen);
-  drawMonitor(ctx, 31, 17, C.monitorScreenBlue);
-  drawChair(ctx, 29, 19);
-
-  // ── PLAN's whiteboard area (top-right-ish) ──
-  drawWhiteboard(ctx, 40, 2);
-  drawChair(ctx, 42, 6);
-
-  // ── SAGE's bookshelf corner (far right top) ──
-  drawBookshelf(ctx, 50, 3);
-  drawChair(ctx, 52, 7);
-
-  // ── Coffee machine (top center) ──
-  drawCoffeeMachine(ctx, 26, 2);
-
-  // ── Meeting room (bottom center) ──
-  drawMeetingTable(ctx, 27, 27);
-
-  // ── SNAP's studio (bottom-right) ──
-  drawStudio(ctx, 50, 28);
-
-  // ── LOOK's design wall (bottom-center-right) ──
-  drawDesignWall(ctx, 33, 28);
-
-  // ── HUNT roams but has a small investigation desk ──
-  drawDesk(ctx, 43, 11, 2, true);
-  drawMonitor(ctx, 43, 11, C.monitorScreen);
-  drawChair(ctx, 45, 12);
-
-  // ── Plants ──
-  drawPlant(ctx, 3, 3);
-  drawPlant(ctx, 56, 3);
-  drawPlant(ctx, 3, 36);
-  drawPlant(ctx, 56, 36);
-  drawPlant(ctx, 24, 10);
-  drawPlant(ctx, 37, 10);
-
-  // ── Water cooler ──
-  drawWaterCooler(ctx, 19, 12);
-}
-
-function drawCarpet(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
-  for (let r = 0; r < h; r++) {
-    for (let c = 0; c < w; c++) {
-      ctx.fillStyle = (r + c) % 2 === 0 ? C.carpet : C.carpetAlt;
-      ctx.fillRect((x + c) * TILE, (y + r) * TILE, TILE, TILE);
-    }
-  }
-}
-
-function drawDesk(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, vertical: boolean) {
-  if (vertical) {
-    ctx.fillStyle = C.desk;
-    ctx.fillRect(x * TILE, y * TILE, TILE * 2, TILE * w);
-    ctx.fillStyle = C.deskTop;
-    ctx.fillRect(x * TILE + 2, y * TILE + 2, TILE * 2 - 4, TILE * w - 4);
-  } else {
-    ctx.fillStyle = C.desk;
-    ctx.fillRect(x * TILE, y * TILE, TILE * w, TILE * 2);
-    ctx.fillStyle = C.deskTop;
-    ctx.fillRect(x * TILE + 2, y * TILE + 2, TILE * w - 4, TILE * 2 - 4);
-  }
-}
-
-function drawMonitor(ctx: CanvasRenderingContext2D, x: number, y: number, screenColor: string) {
-  ctx.fillStyle = C.monitor;
-  ctx.fillRect(x * TILE + 3, y * TILE + 3, TILE - 6, TILE - 4);
-  ctx.fillStyle = screenColor;
-  ctx.fillRect(x * TILE + 5, y * TILE + 5, TILE - 10, TILE - 8);
-  // screen glow
-  ctx.globalAlpha = 0.15;
-  ctx.fillStyle = screenColor;
-  ctx.fillRect((x - 1) * TILE, (y - 1) * TILE, TILE * 3, TILE * 3);
-  ctx.globalAlpha = 1;
-}
-
-function drawChair(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  ctx.fillStyle = C.chair;
-  ctx.beginPath();
-  ctx.arc(x * TILE + TILE / 2, y * TILE + TILE / 2, TILE / 2.5, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function drawWhiteboard(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  ctx.fillStyle = C.whiteboardFrame;
-  ctx.fillRect(x * TILE, y * TILE, TILE * 6, TILE * 3);
-  ctx.fillStyle = C.whiteboard;
-  ctx.fillRect(x * TILE + 3, y * TILE + 3, TILE * 6 - 6, TILE * 3 - 6);
-  // some "writing" on the board
-  ctx.fillStyle = "#cc3333";
-  ctx.fillRect(x * TILE + 8, y * TILE + 10, 30, 2);
-  ctx.fillStyle = "#3366cc";
-  ctx.fillRect(x * TILE + 8, y * TILE + 16, 45, 2);
-  ctx.fillStyle = "#33aa33";
-  ctx.fillRect(x * TILE + 8, y * TILE + 22, 20, 2);
-  ctx.fillRect(x * TILE + 8, y * TILE + 28, 55, 2);
-}
-
-function drawBookshelf(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  ctx.fillStyle = C.bookshelf;
-  ctx.fillRect(x * TILE, y * TILE, TILE * 6, TILE * 4);
-  // shelves
-  const colors = [C.bookColor1, C.bookColor2, C.bookColor3, C.bookColor4];
-  for (let shelf = 0; shelf < 3; shelf++) {
-    for (let b = 0; b < 8; b++) {
-      ctx.fillStyle = colors[(shelf + b) % colors.length];
-      const bx = x * TILE + 4 + b * 11;
-      const by = y * TILE + 4 + shelf * 18;
-      ctx.fillRect(bx, by, 8, 14);
-    }
-  }
-}
-
-function drawCoffeeMachine(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  ctx.fillStyle = C.coffee;
-  ctx.fillRect(x * TILE, y * TILE, TILE * 3, TILE * 2);
-  ctx.fillStyle = C.coffeeTop;
-  ctx.fillRect(x * TILE + 4, y * TILE + 4, TILE * 3 - 8, TILE - 4);
-  // coffee indicator light
-  ctx.fillStyle = "#ff3333";
-  ctx.fillRect(x * TILE + 6, y * TILE + 6, 4, 4);
-  ctx.fillStyle = "#00ff00";
-  ctx.fillRect(x * TILE + 12, y * TILE + 6, 4, 4);
-}
-
-function drawMeetingTable(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  ctx.fillStyle = C.meetingTable;
-  ctx.fillRect(x * TILE, y * TILE, TILE * 6, TILE * 4);
-  ctx.fillStyle = "#7b6b4a";
-  ctx.fillRect(x * TILE + 3, y * TILE + 3, TILE * 6 - 6, TILE * 4 - 6);
-  // chairs around
-  for (let i = 0; i < 3; i++) {
-    drawChair(ctx, x + i * 2 + 1, y - 1);
-    drawChair(ctx, x + i * 2 + 1, y + 4);
-  }
-}
-
-function drawStudio(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  // studio lights
-  ctx.fillStyle = C.studioLight;
-  ctx.fillRect(x * TILE, y * TILE, TILE, TILE * 3);
-  ctx.fillRect((x + 5) * TILE, y * TILE, TILE, TILE * 3);
-  // camera
-  ctx.fillStyle = C.camera;
-  ctx.fillRect((x + 2) * TILE, (y + 1) * TILE, TILE * 2, TILE);
-  ctx.fillStyle = "#555566";
-  ctx.fillRect((x + 2) * TILE + 4, (y + 1) * TILE + 3, TILE - 4, TILE - 6);
-  // tripod
-  ctx.fillStyle = "#444444";
-  ctx.fillRect((x + 2) * TILE + 6, (y + 2) * TILE, 4, TILE);
-}
-
-function drawMailStation(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  // mail slots
-  for (let i = 0; i < 3; i++) {
-    ctx.fillStyle = C.mailSlot;
-    ctx.fillRect(x * TILE, (y + i * 2) * TILE, TILE * 4, TILE * 2 - 2);
-    ctx.fillStyle = "#bbaa88";
-    ctx.fillRect(x * TILE + 3, (y + i * 2) * TILE + 3, TILE * 4 - 6, TILE * 2 - 8);
-    // envelope icon
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(x * TILE + 8, (y + i * 2) * TILE + 6, 12, 8);
-    ctx.fillStyle = "#cccccc";
-    ctx.fillRect(x * TILE + 10, (y + i * 2) * TILE + 8, 8, 4);
-  }
-}
-
-function drawFilingCabinets(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  for (let i = 0; i < 3; i++) {
-    ctx.fillStyle = C.filing;
-    ctx.fillRect((x + i * 2) * TILE, y * TILE, TILE * 2, TILE * 4);
-    // drawer lines
-    for (let d = 0; d < 3; d++) {
-      ctx.fillStyle = "#556677";
-      ctx.fillRect((x + i * 2) * TILE + 2, y * TILE + 4 + d * 18, TILE * 2 - 4, 14);
-      ctx.fillStyle = C.filingHandle;
-      ctx.fillRect((x + i * 2) * TILE + 10, y * TILE + 8 + d * 18, 12, 4);
-    }
-  }
-}
-
-function drawDesignWall(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  ctx.fillStyle = C.designWall;
-  ctx.fillRect(x * TILE, y * TILE, TILE * 6, TILE * 4);
-  // mood board cards
-  const cardColors = ["#ff6666", "#66aaff", "#ffaa33", "#66ff99", "#ff66cc", "#aaaaff"];
-  for (let r = 0; r < 2; r++) {
-    for (let c = 0; c < 3; c++) {
-      ctx.fillStyle = cardColors[r * 3 + c];
-      ctx.fillRect(x * TILE + 5 + c * 28, y * TILE + 5 + r * 28, 22, 22);
-    }
-  }
-}
-
-function drawPlant(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  ctx.fillStyle = C.plantPot;
-  ctx.fillRect(x * TILE + 3, y * TILE + 8, TILE - 6, TILE - 8);
-  ctx.fillStyle = C.plant;
-  ctx.beginPath();
-  ctx.arc(x * TILE + TILE / 2, y * TILE + 6, 6, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillRect(x * TILE + 2, y * TILE + 2, 4, 6);
-  ctx.fillRect(x * TILE + TILE - 6, y * TILE + 2, 4, 6);
-}
-
-function drawWaterCooler(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  ctx.fillStyle = "#aabbcc";
-  ctx.fillRect(x * TILE + 2, y * TILE + 4, TILE - 4, TILE * 2 - 4);
-  ctx.fillStyle = "#88ccff";
-  ctx.fillRect(x * TILE + 4, y * TILE, TILE - 8, TILE - 2);
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(x * TILE + 5, y * TILE + 2, TILE - 10, 6);
-}
-
-// ─── Agent State ───
-interface AgentState {
-  def: AgentDef;
+  station: string;
   x: number;
   y: number;
   targetX: number;
   targetY: number;
-  state: "idle" | "walking" | "arrived";
-  idleTimer: number;
-  img: HTMLImageElement | null;
+  speed: number;
+  sprite: HTMLImageElement | null;
+  state: "idle" | "walking" | "working";
+  stateTimer: number;
+  idleTime: number;
+  direction: "left" | "right";
+  bobOffset: number;
+  statusMsg: string;
 }
 
-function createAgentState(def: AgentDef): AgentState {
-  return {
-    def,
-    x: def.homeX * TILE,
-    y: def.homeY * TILE,
-    targetX: def.homeX * TILE,
-    targetY: def.homeY * TILE,
-    state: "idle",
-    idleTimer: Math.random() * 120 + 60,
-    img: null,
-  };
+// ─── Constants ──────────────────────────────────────────────────
+const CANVAS_W = 1200;
+const CANVAS_H = 800;
+const SPRITE_SIZE = 56;
+const TILE = 32;
+
+const AGENTS_DATA: {
+  id: string;
+  name: string;
+  role: string;
+  station: string;
+  status: string;
+}[] = [
+  { id: "wire", name: "WIRE", role: "CEO / Orchestrator", station: "command", status: "Coordinating team" },
+  { id: "code", name: "CODE", role: "Builder", station: "coding", status: "Shipping features" },
+  { id: "hunt", name: "HUNT", role: "Scout", station: "research", status: "Investigating leads" },
+  { id: "snap", name: "SNAP", role: "Media Producer", station: "studio", status: "Generating assets" },
+  { id: "plan", name: "PLAN", role: "Strategist", station: "whiteboard", status: "Planning sprints" },
+  { id: "eyes", name: "EYES", role: "Code Critic", station: "review", status: "Reviewing PRs" },
+  { id: "sage", name: "SAGE", role: "Advisor", station: "library", status: "Deep in thought" },
+  { id: "mail", name: "MAIL", role: "Comms", station: "mailroom", status: "Triaging inbox" },
+  { id: "memo", name: "MEMO", role: "Scribe", station: "filing", status: "Updating memory" },
+  { id: "look", name: "LOOK", role: "Designer", station: "design", status: "Checking design system" },
+];
+
+const STATIONS: Station[] = [
+  // Center command - WIRE
+  { name: "command", x: 520, y: 340, w: 160, h: 100, color: "#1a1a2e", label: "⚡ Command Center" },
+  // Left wing - builders
+  { name: "coding", x: 80, y: 180, w: 140, h: 90, color: "#16213e", label: "💻 Dev Bay" },
+  { name: "review", x: 80, y: 340, w: 130, h: 80, color: "#1a1a2e", label: "👁️ Review Screens" },
+  { name: "design", x: 80, y: 500, w: 140, h: 80, color: "#1a1a2e", label: "🎨 Design Wall" },
+  // Right wing - research/strategy
+  { name: "research", x: 960, y: 180, w: 140, h: 90, color: "#16213e", label: "🔍 Research Lab" },
+  { name: "library", x: 960, y: 340, w: 140, h: 90, color: "#0f3460", label: "📚 Think Tank" },
+  { name: "whiteboard", x: 960, y: 500, w: 140, h: 80, color: "#1a1a2e", label: "📋 War Room" },
+  // Top - comms
+  { name: "studio", x: 380, y: 80, w: 130, h: 80, color: "#1a1a2e", label: "📸 Studio" },
+  { name: "mailroom", x: 700, y: 80, w: 130, h: 80, color: "#16213e", label: "📬 Mailroom" },
+  // Bottom - storage
+  { name: "filing", x: 520, y: 620, w: 140, h: 80, color: "#1a1a2e", label: "🗄️ Archives" },
+  // Shared spaces
+  { name: "coffee", x: 380, y: 620, w: 80, h: 60, color: "#2d1b4e", label: "☕ Coffee" },
+  { name: "meeting", x: 700, y: 620, w: 100, h: 70, color: "#2d1b4e", label: "🤝 Huddle" },
+];
+
+// ─── Helpers ────────────────────────────────────────────────────
+function stationCenter(s: Station): Vec2 {
+  return { x: s.x + s.w / 2, y: s.y + s.h / 2 };
 }
 
-function pickTarget(agent: AgentState): { x: number; y: number } {
-  const isHome = Math.abs(agent.x - agent.def.homeX * TILE) < TILE && Math.abs(agent.y - agent.def.homeY * TILE) < TILE;
-  if (isHome) {
-    // Go to a shared area
-    const area = SHARED_AREAS[Math.floor(Math.random() * SHARED_AREAS.length)];
-    // HUNT roams more — sometimes picks random spots
-    if (agent.def.id === "hunt" && Math.random() < 0.4) {
-      return {
-        x: (4 + Math.floor(Math.random() * (COLS - 8))) * TILE,
-        y: (4 + Math.floor(Math.random() * (ROWS - 8))) * TILE,
-      };
-    }
-    return { x: area.x * TILE, y: area.y * TILE };
-  } else {
-    // Go home
-    return { x: agent.def.homeX * TILE, y: agent.def.homeY * TILE };
-  }
+function dist(a: Vec2, b: Vec2): number {
+  return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
 }
 
-function updateAgent(agent: AgentState) {
-  if (agent.state === "idle") {
-    agent.idleTimer--;
-    if (agent.idleTimer <= 0) {
-      const t = pickTarget(agent);
-      agent.targetX = t.x;
-      agent.targetY = t.y;
-      agent.state = "walking";
-    }
-  } else if (agent.state === "walking") {
-    const dx = agent.targetX - agent.x;
-    const dy = agent.targetY - agent.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 2) {
-      agent.x = agent.targetX;
-      agent.y = agent.targetY;
-      agent.state = "idle";
-      agent.idleTimer = agent.def.id === "hunt" ? Math.random() * 60 + 30 : Math.random() * 180 + 90;
-    } else {
-      const speed = agent.def.id === "hunt" ? 1.2 : 0.8;
-      agent.x += (dx / dist) * speed;
-      agent.y += (dy / dist) * speed;
-    }
-  }
+function pickRandomStation(exclude: string): Station {
+  const pool = STATIONS.filter((s) => s.name !== exclude);
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
-function drawAgent(ctx: CanvasRenderingContext2D, agent: AgentState, time: number) {
-  const size = 28;
-  const bob = agent.state === "walking" ? Math.sin(time * 0.15) * 1.5 : 0;
-  const drawX = agent.x - size / 2;
-  const drawY = agent.y - size / 2 + bob;
-
-  if (agent.img && agent.img.complete) {
-    // Draw shadow
-    ctx.globalAlpha = 0.25;
-    ctx.fillStyle = "#000";
-    ctx.beginPath();
-    ctx.ellipse(agent.x, agent.y + size / 2 + 2, size / 2.5, 4, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    ctx.drawImage(agent.img, drawX, drawY, size, size);
-  } else {
-    // Fallback colored circle
-    ctx.fillStyle = "#ff6688";
-    ctx.beginPath();
-    ctx.arc(agent.x, agent.y + bob, size / 2, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Name tag
-  ctx.fillStyle = "rgba(0,0,0,0.6)";
-  ctx.fillRect(agent.x - 16, agent.y - size / 2 - 12 + bob, 32, 10);
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 7px monospace";
-  ctx.textAlign = "center";
-  ctx.fillText(agent.def.name, agent.x, agent.y - size / 2 - 4 + bob);
-}
-
-// ─── Main Component ───
+// ─── Component ──────────────────────────────────────────────────
 export default function AgentOffice() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const agentsRef = useRef<AgentState[]>([]);
+  const agentsRef = useRef<Agent[]>([]);
+  const spritesLoadedRef = useRef(false);
+  const [tooltip, setTooltip] = useState<{
+    agent: Agent;
+    x: number;
+    y: number;
+  } | null>(null);
   const frameRef = useRef(0);
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; agent: AgentDef } | null>(null);
+  const timeRef = useRef(0);
 
+  // Load sprites + init agents
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
-    ctx.imageSmoothingEnabled = false;
+    let loaded = 0;
+    const total = AGENTS_DATA.length;
 
-    // Init agents
-    const agents = AGENTS.map((def) => {
-      const state = createAgentState(def);
+    const agents: Agent[] = AGENTS_DATA.map((a) => {
+      const station = STATIONS.find((s) => s.name === a.station)!;
+      const center = stationCenter(station);
       const img = new Image();
-      img.src = def.sprite;
-      state.img = img;
-      return state;
+      img.src = `/sprites/${a.id}.png`;
+      img.onload = () => {
+        loaded++;
+        if (loaded === total) spritesLoadedRef.current = true;
+      };
+      return {
+        id: a.id,
+        name: a.name,
+        role: a.role,
+        station: a.station,
+        x: center.x + (Math.random() - 0.5) * 40,
+        y: center.y + (Math.random() - 0.5) * 30,
+        targetX: center.x,
+        targetY: center.y,
+        speed: 0.6 + Math.random() * 0.4,
+        sprite: img,
+        state: "idle",
+        stateTimer: Math.random() * 300 + 100,
+        idleTime: 0,
+        direction: "right",
+        bobOffset: Math.random() * Math.PI * 2,
+        statusMsg: a.status,
+      };
     });
+
     agentsRef.current = agents;
+  }, []);
 
-    // Pre-render office background
-    const bgCanvas = document.createElement("canvas");
-    bgCanvas.width = W;
-    bgCanvas.height = H;
-    const bgCtx = bgCanvas.getContext("2d")!;
-    drawOffice(bgCtx);
-
+  // Game loop
+  useEffect(() => {
     let animId: number;
-    let frame = 0;
 
-    function loop() {
-      frame++;
-      ctx.clearRect(0, 0, W, H);
-      ctx.drawImage(bgCanvas, 0, 0);
+    const statuses: Record<string, string[]> = {
+      wire: ["Coordinating team", "Reviewing agent output", "Prioritizing tasks", "Checking Slack"],
+      code: ["Shipping features", "Fixing bugs", "Writing tests", "npm install"],
+      hunt: ["Investigating leads", "Deep web search", "Reading API docs", "Competitive analysis"],
+      snap: ["Generating assets", "Recording walkthrough", "Editing video", "Processing frames"],
+      plan: ["Planning sprints", "Prepping standup", "Updating roadmap", "Calendar review"],
+      eyes: ["Reviewing PRs", "BLOCK on line 42", "Running linter", "Checking types"],
+      sage: ["Deep in thought", "Architecture review", "Risk assessment", "Thinking..."],
+      mail: ["Triaging inbox", "Drafting reply", "LinkedIn outreach", "Scheduling send"],
+      memo: ["Updating memory", "Filing notes", "Cross-referencing", "Daily summary"],
+      look: ["Checking design system", "Pixel auditing", "Color review", "Responsive check"],
+    };
 
-      // Update & draw agents
-      for (const agent of agents) {
-        updateAgent(agent);
+    const tick = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d")!;
+      timeRef.current++;
+      const t = timeRef.current;
+
+      // Clear
+      ctx.fillStyle = "#0a0a1a";
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+      // Draw floor grid
+      ctx.strokeStyle = "#151530";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < CANVAS_W; x += TILE) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, CANVAS_H);
+        ctx.stroke();
       }
-      // Sort by Y for depth
-      const sorted = [...agents].sort((a, b) => a.y - b.y);
-      for (const agent of sorted) {
-        drawAgent(ctx, agent, frame);
+      for (let y = 0; y < CANVAS_H; y += TILE) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(CANVAS_W, y);
+        ctx.stroke();
       }
 
-      frameRef.current = frame;
-      animId = requestAnimationFrame(loop);
-    }
+      // Draw stations
+      for (const s of STATIONS) {
+        // Station bg
+        ctx.fillStyle = s.color;
+        ctx.fillRect(s.x, s.y, s.w, s.h);
 
-    loop();
+        // Glow border
+        const glow = s.name === "command" ? "#00d4ff" : "#1e3a5f";
+        ctx.strokeStyle = glow;
+        ctx.lineWidth = s.name === "command" ? 2 : 1;
+        ctx.strokeRect(s.x, s.y, s.w, s.h);
+
+        // Animated scan line for command center
+        if (s.name === "command") {
+          const scanY = s.y + ((t * 0.5) % s.h);
+          ctx.strokeStyle = "rgba(0, 212, 255, 0.15)";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(s.x, scanY);
+          ctx.lineTo(s.x + s.w, scanY);
+          ctx.stroke();
+        }
+
+        // Label
+        ctx.fillStyle = "#4a6a8a";
+        ctx.font = "11px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(s.label, s.x + s.w / 2, s.y - 6);
+      }
+
+      // Draw connection lines between command and active stations (pulse effect)
+      const wireAgent = agentsRef.current.find((a) => a.id === "wire");
+      if (wireAgent && wireAgent.state === "idle") {
+        const cmdStation = STATIONS.find((s) => s.name === "command")!;
+        const cmdCenter = stationCenter(cmdStation);
+        for (const agent of agentsRef.current) {
+          if (agent.id === "wire") continue;
+          if (agent.state !== "idle") continue;
+          const agentStation = STATIONS.find((s) => s.name === agent.station);
+          if (!agentStation) continue;
+          const aCenter = stationCenter(agentStation);
+          const alpha = 0.05 + 0.03 * Math.sin(t * 0.02 + AGENTS_DATA.findIndex((a) => a.id === agent.id));
+          ctx.strokeStyle = `rgba(0, 212, 255, ${alpha})`;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 8]);
+          ctx.beginPath();
+          ctx.moveTo(cmdCenter.x, cmdCenter.y);
+          ctx.lineTo(aCenter.x, aCenter.y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+
+      // Update + draw agents
+      for (const agent of agentsRef.current) {
+        // State machine
+        agent.stateTimer--;
+        if (agent.stateTimer <= 0) {
+          if (agent.state === "idle") {
+            // Decide: go to coffee, meeting, or wander
+            const roll = Math.random();
+            if (roll < 0.15) {
+              const coffee = STATIONS.find((s) => s.name === "coffee")!;
+              const c = stationCenter(coffee);
+              agent.targetX = c.x + (Math.random() - 0.5) * 30;
+              agent.targetY = c.y + (Math.random() - 0.5) * 20;
+              agent.state = "walking";
+              agent.stateTimer = 600;
+              agent.statusMsg = "Getting coffee ☕";
+            } else if (roll < 0.25) {
+              const meeting = STATIONS.find((s) => s.name === "meeting")!;
+              const c = stationCenter(meeting);
+              agent.targetX = c.x + (Math.random() - 0.5) * 40;
+              agent.targetY = c.y + (Math.random() - 0.5) * 30;
+              agent.state = "walking";
+              agent.stateTimer = 500;
+              agent.statusMsg = "In a huddle 🤝";
+            } else if (roll < 0.35) {
+              // Visit another agent's station
+              const other = pickRandomStation(agent.station);
+              const c = stationCenter(other);
+              agent.targetX = c.x + (Math.random() - 0.5) * 30;
+              agent.targetY = c.y + (Math.random() - 0.5) * 20;
+              agent.state = "walking";
+              agent.stateTimer = 400;
+              agent.statusMsg = `Visiting ${other.label}`;
+            } else {
+              // Stay idle, change status
+              const msgs = statuses[agent.id] || ["Working..."];
+              agent.statusMsg = msgs[Math.floor(Math.random() * msgs.length)];
+              agent.stateTimer = 200 + Math.random() * 400;
+            }
+          } else if (agent.state === "walking") {
+            // Return home
+            const home = STATIONS.find((s) => s.name === agent.station)!;
+            const c = stationCenter(home);
+            agent.targetX = c.x + (Math.random() - 0.5) * 40;
+            agent.targetY = c.y + (Math.random() - 0.5) * 30;
+            agent.state = "walking";
+            agent.stateTimer = 300;
+            // After arriving home, go idle
+            const dHome = dist({ x: agent.x, y: agent.y }, { x: agent.targetX, y: agent.targetY });
+            if (dHome < 10) {
+              agent.state = "idle";
+              agent.stateTimer = 200 + Math.random() * 500;
+              const msgs = statuses[agent.id] || ["Working..."];
+              agent.statusMsg = msgs[Math.floor(Math.random() * msgs.length)];
+            }
+          }
+        }
+
+        // Move toward target
+        const dx = agent.targetX - agent.x;
+        const dy = agent.targetY - agent.y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d > 2) {
+          agent.x += (dx / d) * agent.speed;
+          agent.y += (dy / d) * agent.speed;
+          agent.direction = dx > 0 ? "right" : "left";
+        }
+
+        // Bob animation
+        const bob = Math.sin(t * 0.05 + agent.bobOffset) * 2;
+
+        // Shadow
+        ctx.fillStyle = "rgba(0, 100, 200, 0.1)";
+        ctx.beginPath();
+        ctx.ellipse(agent.x, agent.y + SPRITE_SIZE / 2 + 4, 16, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw sprite
+        if (agent.sprite && spritesLoadedRef.current) {
+          ctx.save();
+          if (agent.direction === "left") {
+            ctx.translate(agent.x, agent.y + bob - SPRITE_SIZE / 2);
+            ctx.scale(-1, 1);
+            ctx.drawImage(agent.sprite, -SPRITE_SIZE / 2, 0, SPRITE_SIZE, SPRITE_SIZE);
+          } else {
+            ctx.drawImage(
+              agent.sprite,
+              agent.x - SPRITE_SIZE / 2,
+              agent.y + bob - SPRITE_SIZE / 2,
+              SPRITE_SIZE,
+              SPRITE_SIZE
+            );
+          }
+          ctx.restore();
+        }
+
+        // Name tag
+        ctx.fillStyle = agent.id === "wire" ? "#00d4ff" : "#6888a8";
+        ctx.font = "bold 10px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(agent.name, agent.x, agent.y - SPRITE_SIZE / 2 - 4 + bob);
+
+        // Working indicator (small dots)
+        if (agent.state === "idle") {
+          const dotCount = 3;
+          for (let i = 0; i < dotCount; i++) {
+            const dotAlpha = 0.3 + 0.3 * Math.sin(t * 0.08 + i * 1.2 + agent.bobOffset);
+            ctx.fillStyle = `rgba(0, 212, 255, ${dotAlpha})`;
+            ctx.beginPath();
+            ctx.arc(agent.x - 8 + i * 8, agent.y - SPRITE_SIZE / 2 - 14 + bob, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+
+      // Title
+      ctx.fillStyle = "#00d4ff";
+      ctx.font = "bold 16px monospace";
+      ctx.textAlign = "left";
+      ctx.fillText("⚡ WHYRE Agent Office", 20, 30);
+      ctx.fillStyle = "#3a5a7a";
+      ctx.font = "11px monospace";
+      ctx.fillText("TappinAI HQ — 10 agents, always shipping", 20, 48);
+
+      // Clock
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+      ctx.fillStyle = "#3a5a7a";
+      ctx.font = "11px monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(timeStr, CANVAS_W - 20, 30);
+
+      animId = requestAnimationFrame(tick);
+    };
+
+    animId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animId);
   }, []);
 
-  function handleClick(e: React.MouseEvent<HTMLCanvasElement>) {
+  // Click handler
+  const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const scaleX = W / rect.width;
-    const scaleY = H / rect.height;
+    const scaleX = CANVAS_W / rect.width;
+    const scaleY = CANVAS_H / rect.height;
     const mx = (e.clientX - rect.left) * scaleX;
     const my = (e.clientY - rect.top) * scaleY;
 
+    let found: Agent | null = null;
     for (const agent of agentsRef.current) {
-      const dx = mx - agent.x;
-      const dy = my - agent.y;
-      if (Math.sqrt(dx * dx + dy * dy) < 18) {
-        setTooltip({ x: e.clientX, y: e.clientY, agent: agent.def });
-        return;
+      const d = dist({ x: mx, y: my }, { x: agent.x, y: agent.y });
+      if (d < SPRITE_SIZE / 2 + 10) {
+        found = agent;
+        break;
       }
     }
-    setTooltip(null);
-  }
+
+    if (found) {
+      setTooltip({
+        agent: { ...found },
+        x: e.clientX,
+        y: e.clientY,
+      });
+    } else {
+      setTooltip(null);
+    }
+  }, []);
 
   return (
-    <div style={{ width: "100vw", height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f23", position: "relative" }}>
+    <div
+      style={{
+        background: "#050510",
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        position: "relative",
+        fontFamily: "monospace",
+      }}
+    >
       <canvas
         ref={canvasRef}
-        width={W}
-        height={H}
+        width={CANVAS_W}
+        height={CANVAS_H}
         onClick={handleClick}
         style={{
-          width: `${W * SCALE}px`,
-          height: `${H * SCALE}px`,
-          imageRendering: "pixelated",
+          border: "1px solid #1a2a4a",
+          borderRadius: 8,
           cursor: "pointer",
-          border: "2px solid #333355",
-          borderRadius: "4px",
+          maxWidth: "95vw",
+          maxHeight: "85vh",
+          imageRendering: "pixelated",
         }}
       />
       {tooltip && (
         <div
           style={{
             position: "fixed",
-            left: tooltip.x + 12,
-            top: tooltip.y - 60,
-            background: "rgba(20,20,40,0.95)",
-            border: "2px solid #5566aa",
-            borderRadius: 8,
+            left: tooltip.x + 16,
+            top: tooltip.y - 20,
+            background: "#0d1b2a",
+            border: "1px solid #00d4ff",
+            borderRadius: 6,
             padding: "10px 14px",
-            color: "#e0e0ff",
-            fontFamily: "monospace",
-            fontSize: 13,
+            color: "#c0d8f0",
+            fontSize: 12,
             zIndex: 100,
             pointerEvents: "none",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+            boxShadow: "0 0 20px rgba(0,212,255,0.2)",
+            minWidth: 160,
           }}
-          onClick={() => setTooltip(null)}
         >
-          <div style={{ fontSize: 18, marginBottom: 4 }}>
-            {tooltip.agent.emoji} <strong>{tooltip.agent.name}</strong>
+          <div style={{ color: "#00d4ff", fontWeight: "bold", fontSize: 14, marginBottom: 4 }}>
+            {tooltip.agent.name}
           </div>
-          <div style={{ color: "#aabbdd", fontSize: 11 }}>{tooltip.agent.role}</div>
+          <div style={{ color: "#6888a8", marginBottom: 2 }}>{tooltip.agent.role}</div>
+          <div style={{ color: "#88aacc" }}>📍 {tooltip.agent.statusMsg}</div>
+          <div style={{ color: "#4a6a8a", marginTop: 4, fontSize: 10 }}>
+            {tooltip.agent.state === "walking" ? "🚶 On the move" : "💼 At station"}
+          </div>
         </div>
       )}
-      <div style={{ position: "fixed", bottom: 12, left: "50%", transform: "translateX(-50%)", color: "#556688", fontFamily: "monospace", fontSize: 11 }}>
-        click an agent to inspect · 10 AI agents at work
+      <div
+        style={{
+          color: "#2a4a6a",
+          fontSize: 11,
+          marginTop: 12,
+          textAlign: "center",
+        }}
+      >
+        Click any agent to see their status • Built with ❤️ by TappinAI
       </div>
     </div>
   );

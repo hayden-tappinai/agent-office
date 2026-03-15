@@ -1,31 +1,38 @@
-# ⚡ Agent Office — WHYRE HQ
+# ⚡ WHYRE Agent Office
 
-A pixel art virtual office where 10 AI agents wander around their workspace.
-
-Each agent has a home station based on their role — CODE sits at a desk coding, HUNT roams around investigating, SNAP hangs near the studio, and WIRE orchestrates from the center.
-
-Click any agent to see their name and current status.
+Pixel art virtual office showing TappinAI's 10-agent team doing their thing.
 
 ## Agents
 
-| Agent | Role | Area |
-|-------|------|------|
-| ⚡ WIRE | CEO / Orchestrator | Center (meeting area) |
-| 💻 CODE | Builder | Coding desk |
-| 👁️ EYES | Code Reviewer | Review station |
-| 🔍 HUNT | Scout / Researcher | Roaming (bookshelf area) |
-| 🎨 LOOK | Designer | Design wall |
-| 📧 MAIL | Comms | Mail corner |
-| 📝 MEMO | Scribe | Filing cabinets |
-| 📋 PLAN | Strategist | Whiteboard |
-| 🧠 SAGE | Strategy Advisor | Thinking corner |
-| 📸 SNAP | Media | Studio area |
+| Agent | Role | Station |
+|-------|------|---------|
+| WIRE | CEO / Orchestrator | Command Center |
+| CODE | Builder | Dev Bay |
+| HUNT | Scout | Research Lab |
+| SNAP | Media Producer | Studio |
+| PLAN | Strategist | War Room |
+| EYES | Code Critic | Review Screens |
+| SAGE | Advisor | Think Tank |
+| MAIL | Comms | Mailroom |
+| MEMO | Scribe | Archives |
+| LOOK | Designer | Design Wall |
+
+## Features
+
+- HTML5 Canvas rendering — no game engine needed
+- Agents autonomously wander between stations, coffee machine, and huddle room
+- Click any agent to see their name, role, and current status
+- Animated connection lines from WIRE's command center
+- Real-time clock
+- Dark cyberpunk office aesthetic
 
 ## Run
 
 ```bash
 npm install
-npm run dev -- --port 3337
+npm run dev
 ```
 
-Built with Next.js + HTML Canvas. Pure vibes, no frameworks.
+## Tech
+
+Next.js + HTML5 Canvas. Pure client-side rendering, no external dependencies beyond React/Next.
