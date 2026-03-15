@@ -254,7 +254,7 @@ function MicButton({
         padding: 0,
         outline: "none",
         boxShadow: "none",
-        transition: "border-color 200ms, transform 100ms",
+        transition: "transform 100ms",
         animation:
           listening && !prefersReduced
             ? "micPulse 1.5s infinite ease-in-out"
@@ -281,6 +281,8 @@ function MicButton({
           imageRendering: "pixelated",
           display: "block",
           margin: "auto",
+          mixBlendMode: "lighten",
+          borderRadius: 8,
         }}
       />
     </button>
