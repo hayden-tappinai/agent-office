@@ -592,39 +592,26 @@ export default function AgentOffice() {
         ctx.fill();
         ctx.restore();
 
-        // Draw sprite with white outline
+        // Draw sprite with back-glow halo (no outline - outlines glitch during movement)
         if (agent.sprite && spritesLoadedRef.current) {
           const sx = agent.x - SPRITE_SIZE / 2;
           const sy = agent.y + bob - SPRITE_SIZE / 2;
-          // White outline (draw sprite offset in 8 directions)
+
+          // Glowing halo BEHIND the agent (circular gradient)
           ctx.save();
-          ctx.globalCompositeOperation = "source-over";
-          // Create outline by drawing white-tinted copies
-          const outlineSize = 3;
-          ctx.filter = "brightness(0) invert(1)";
-          for (let ox = -outlineSize; ox <= outlineSize; ox++) {
-            for (let oy = -outlineSize; oy <= outlineSize; oy++) {
-              if (ox === 0 && oy === 0) continue;
-              if (agent.direction === "left") {
-                ctx.save();
-                ctx.translate(agent.x + ox, agent.y + bob - SPRITE_SIZE / 2 + oy);
-                ctx.scale(-1, 1);
-                ctx.drawImage(agent.sprite, -SPRITE_SIZE / 2, 0, SPRITE_SIZE, SPRITE_SIZE);
-                ctx.restore();
-              } else {
-                ctx.drawImage(agent.sprite, sx + ox, sy + oy, SPRITE_SIZE, SPRITE_SIZE);
-              }
-            }
-          }
-          ctx.filter = "none";
+          const haloColor = isActive ? "rgba(255, 140, 50, 0.5)" : "rgba(80, 200, 255, 0.35)";
+          const haloGrad = ctx.createRadialGradient(agent.x, agent.y + bob, 0, agent.x, agent.y + bob, SPRITE_SIZE * 0.7);
+          haloGrad.addColorStop(0, haloColor);
+          haloGrad.addColorStop(0.6, isActive ? "rgba(255, 140, 50, 0.15)" : "rgba(80, 200, 255, 0.08)");
+          haloGrad.addColorStop(1, "transparent");
+          ctx.fillStyle = haloGrad;
+          ctx.beginPath();
+          ctx.arc(agent.x, agent.y + bob, SPRITE_SIZE * 0.7, 0, Math.PI * 2);
+          ctx.fill();
           ctx.restore();
 
           // Draw actual sprite on top
           ctx.save();
-          if (isActive) {
-            ctx.shadowColor = "rgba(255, 140, 50, 0.6)";
-            ctx.shadowBlur = 12;
-          }
           if (agent.direction === "left") {
             ctx.translate(agent.x, agent.y + bob - SPRITE_SIZE / 2);
             ctx.scale(-1, 1);
