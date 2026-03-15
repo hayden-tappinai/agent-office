@@ -738,7 +738,7 @@ export default function AgentOffice() {
           ctx.fillStyle = '#FFFFFF';
           ctx.globalAlpha = 1.0;
           ctx.beginPath();
-          ctx.arc(agent.x, agent.y + bob, SPRITE_SIZE * 0.65, 0, Math.PI * 2);
+          ctx.arc(agent.x, agent.y + bob, SPRITE_SIZE * 0.45, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
 
