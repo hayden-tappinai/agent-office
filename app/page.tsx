@@ -48,7 +48,7 @@ interface Agent {
   targetY: number;
   speed: number;
   sprite: HTMLImageElement | null;
-  state: "idle" | "walking" | "working";
+  state: "idle" | "walking" | "working" | "getting_coffee" | "returning_coffee";
   stateTimer: number;
   idleTime: number;
   direction: "left" | "right";
@@ -58,6 +58,10 @@ interface Agent {
   activity: AgentActivity;
   currentTask: string;
   completedAt: number; // timestamp for fade-out
+  // Coffee system
+  coffeeCycleCounter: number;
+  coffeeIconAlpha: number; // fades after returning from coffee
+  hasCoffee: boolean;
 }
 
 // ─── Dialogue & Interior Data ───────────────────────────────────
@@ -77,6 +81,13 @@ const AGENT_ROLES: Record<string, string> = {
   wire: "CEO / Orchestrator", code: "Builder", look: "Designer", hunt: "Scout",
   mail: "Comms", plan: "Strategist", eyes: "Code Critic", sage: "Advisor",
   snap: "Media Producer", memo: "Scribe",
+};
+
+// Coffee frequency: how many idle cycles between coffee runs (lower = more frequent)
+const COFFEE_FREQUENCY: Record<string, [number, number]> = {
+  wire: [3, 5], code: [3, 5], snap: [3, 5], hunt: [3, 5],   // busy agents
+  eyes: [5, 8], look: [5, 8], sage: [5, 8],                   // moderate
+  plan: [8, 12], mail: [8, 12], memo: [8, 12],                // less frequent
 };
 
 const AGENT_SAYINGS: Record<string, string[]> = {
@@ -311,6 +322,7 @@ export default function AgentOffice() {
   const timeRef = useRef(0);
   const stationImagesRef = useRef<Record<string, HTMLImageElement>>({});
   const warRoomImageRef = useRef<HTMLImageElement | null>(null);
+  const coffeeCountsRef = useRef<Record<string, number>>({});
 
   // Dialogue state
   const [dialogue, setDialogue] = useState<DialogueState | null>(null);
@@ -470,6 +482,8 @@ export default function AgentOffice() {
         loaded++;
         if (loaded === total) spritesLoadedRef.current = true;
       };
+      const freq = COFFEE_FREQUENCY[a.id] || [5, 8];
+      const coffeeThreshold = freq[0] + Math.floor(Math.random() * (freq[1] - freq[0] + 1));
       return {
         id: a.id,
         name: a.name,
@@ -490,6 +504,9 @@ export default function AgentOffice() {
         activity: "idle" as AgentActivity,
         currentTask: "",
         completedAt: 0,
+        coffeeCycleCounter: Math.floor(Math.random() * coffeeThreshold), // stagger initial
+        coffeeIconAlpha: 0,
+        hasCoffee: false,
       };
     });
 
@@ -666,7 +683,11 @@ export default function AgentOffice() {
         ctx.fillStyle = theme.stationLabel;
         ctx.font = "11px monospace";
         ctx.textAlign = "center";
-        ctx.fillText(s.label, s.x + s.w / 2, s.y - 6);
+        // Add coffee count to station label
+        const stationAgent = AGENTS_DATA.find((a) => a.station === s.name);
+        const coffeeCount = stationAgent ? (coffeeCountsRef.current[stationAgent.id] || 0) : 0;
+        const coffeeLabel = coffeeCount > 0 ? ` ☕×${coffeeCount}` : "";
+        ctx.fillText(s.label + coffeeLabel, s.x + s.w / 2, s.y - 6);
       }
 
       // ─── Draw War Room ────────────────────────────────────
@@ -838,10 +859,22 @@ export default function AgentOffice() {
         } else {
           // Normal idle behavior
           agent.stateTimer--;
+
+          // Fade coffee icon over time
+          if (agent.coffeeIconAlpha > 0) {
+            agent.coffeeIconAlpha -= 0.003; // ~5 seconds to fully fade
+            if (agent.coffeeIconAlpha < 0) agent.coffeeIconAlpha = 0;
+          }
+
           if (agent.stateTimer <= 0) {
             if (agent.state === "idle") {
-              const roll = Math.random();
-              if (roll < 0.12) {
+              agent.coffeeCycleCounter++;
+              const freq = COFFEE_FREQUENCY[agent.id] || [5, 8];
+              const threshold = freq[0] + Math.floor(Math.random() * (freq[1] - freq[0] + 1));
+
+              if (agent.coffeeCycleCounter >= threshold) {
+                // Time for coffee!
+                agent.coffeeCycleCounter = 0;
                 const coffee = STATIONS.find((s) => s.name === "coffee")!;
                 const c = stationCenter(coffee);
                 agent.targetX = c.x + (Math.random() - 0.5) * 30;
@@ -849,7 +882,7 @@ export default function AgentOffice() {
                 agent.state = "walking";
                 agent.stateTimer = 600;
                 agent.statusMsg = "Getting coffee ☕";
-              } else if (roll < 0.22) {
+              } else if (Math.random() < 0.15) {
                 const other = pickRandomStation(agent.station);
                 const c = stationCenter(other);
                 agent.targetX = c.x + (Math.random() - 0.5) * 30;
@@ -862,19 +895,49 @@ export default function AgentOffice() {
                 agent.statusMsg = msgs[Math.floor(Math.random() * msgs.length)];
                 agent.stateTimer = 200 + Math.random() * 400;
               }
-            } else if (agent.state === "walking") {
+            } else if (agent.state === "getting_coffee") {
+              // Finished picking up coffee — now walk back to desk
+              coffeeCountsRef.current[agent.id] = (coffeeCountsRef.current[agent.id] || 0) + 1;
+              agent.hasCoffee = true;
+              agent.coffeeIconAlpha = 1.0;
               const home = STATIONS.find((s) => s.name === agent.station)!;
               const c = stationCenter(home);
               agent.targetX = c.x + (Math.random() - 0.5) * 40;
               agent.targetY = c.y + (Math.random() - 0.5) * 30;
-              agent.state = "walking";
-              agent.stateTimer = 300;
-              const dHome = dist({ x: agent.x, y: agent.y }, { x: agent.targetX, y: agent.targetY });
-              if (dHome < 10) {
-                agent.state = "idle";
-                agent.stateTimer = 200 + Math.random() * 500;
-                const msgs = idleStatuses[agent.id] || ["Working..."];
-                agent.statusMsg = msgs[Math.floor(Math.random() * msgs.length)];
+              agent.state = "returning_coffee";
+              agent.stateTimer = 400;
+              agent.statusMsg = "Coffee in hand ☕";
+            } else if (agent.state === "returning_coffee") {
+              // Back at desk
+              agent.state = "idle";
+              agent.hasCoffee = false;
+              agent.stateTimer = 200 + Math.random() * 500;
+              const msgs = idleStatuses[agent.id] || ["Working..."];
+              agent.statusMsg = msgs[Math.floor(Math.random() * msgs.length)];
+            } else if (agent.state === "walking") {
+              // Check if we arrived at coffee station
+              const coffeeStation = STATIONS.find((s) => s.name === "coffee")!;
+              const coffeeCenter = stationCenter(coffeeStation);
+              const dCoffee = dist({ x: agent.x, y: agent.y }, coffeeCenter);
+              if (dCoffee < 60 && agent.statusMsg.includes("coffee")) {
+                // Arrived at coffee — pause to pick up
+                agent.state = "getting_coffee";
+                agent.stateTimer = 60 + Math.floor(Math.random() * 60); // 1-2 seconds at 60fps
+                agent.statusMsg = "Picking up coffee...";
+              } else {
+                const home = STATIONS.find((s) => s.name === agent.station)!;
+                const c = stationCenter(home);
+                agent.targetX = c.x + (Math.random() - 0.5) * 40;
+                agent.targetY = c.y + (Math.random() - 0.5) * 30;
+                agent.state = "walking";
+                agent.stateTimer = 300;
+                const dHome = dist({ x: agent.x, y: agent.y }, { x: agent.targetX, y: agent.targetY });
+                if (dHome < 10) {
+                  agent.state = "idle";
+                  agent.stateTimer = 200 + Math.random() * 500;
+                  const msgs = idleStatuses[agent.id] || ["Working..."];
+                  agent.statusMsg = msgs[Math.floor(Math.random() * msgs.length)];
+                }
               }
             }
           }
@@ -941,6 +1004,32 @@ export default function AgentOffice() {
               SPRITE_SIZE
             );
           }
+          ctx.restore();
+        }
+
+        // Draw pixelated coffee icon next to agent (fading)
+        if (agent.coffeeIconAlpha > 0 || agent.hasCoffee) {
+          const alpha = agent.hasCoffee ? 1.0 : agent.coffeeIconAlpha;
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.imageSmoothingEnabled = false;
+          const coffeeX = agent.x + SPRITE_SIZE / 2 - 8;
+          const coffeeY = agent.y + bob - 16;
+          // Draw a tiny pixelated coffee cup (8x10 pixels, scaled 2x)
+          const px = 2; // pixel scale
+          // Cup body (brown)
+          ctx.fillStyle = "#8B4513";
+          ctx.fillRect(coffeeX, coffeeY + 2*px, 4*px, 3*px);
+          // Cup handle
+          ctx.fillRect(coffeeX + 4*px, coffeeY + 3*px, 1*px, 1*px);
+          // Coffee liquid (dark)
+          ctx.fillStyle = "#4a2a0a";
+          ctx.fillRect(coffeeX + 0.5*px, coffeeY + 2*px, 3*px, 1*px);
+          // Steam (white, animated)
+          const steamOffset = Math.sin(t * 0.08 + agent.bobOffset) * 1.5;
+          ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.7})`;
+          ctx.fillRect(coffeeX + 1*px, coffeeY + steamOffset, 1*px, 1*px);
+          ctx.fillRect(coffeeX + 2.5*px, coffeeY - 1*px + steamOffset, 1*px, 1*px);
           ctx.restore();
         }
 
