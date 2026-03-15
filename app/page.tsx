@@ -61,12 +61,12 @@ interface Agent {
 }
 
 // ─── Constants ──────────────────────────────────────────────────
-const CANVAS_W = 1200;
-const CANVAS_H = 800;
-const SPRITE_SIZE = 56;
-const TILE = 32;
+const CANVAS_W = 1920;
+const CANVAS_H = 1080;
+const SPRITE_SIZE = 72;
+const TILE = 40;
 
-const WAR_ROOM = { x: 460, y: 540, w: 280, h: 140 };
+const WAR_ROOM = { x: 720, y: 750, w: 480, h: 200 };
 const WAR_ROOM_CENTER = { x: WAR_ROOM.x + WAR_ROOM.w / 2, y: WAR_ROOM.y + WAR_ROOM.h / 2 };
 
 const AGENTS_DATA: {
@@ -90,21 +90,21 @@ const AGENTS_DATA: {
 
 const STATIONS: Station[] = [
   // Center command - WIRE
-  { name: "command", x: 520, y: 300, w: 160, h: 100, color: "#1a1a2e", label: "⚡ Command Center" },
+  { name: "command", x: 800, y: 380, w: 320, h: 180, color: "#1a1a2e", label: "⚡ Command Center" },
   // Left wing - builders
-  { name: "coding", x: 80, y: 180, w: 140, h: 90, color: "#16213e", label: "💻 Dev Bay" },
-  { name: "review", x: 80, y: 340, w: 130, h: 80, color: "#1a1a2e", label: "👁️ Review Screens" },
-  { name: "design", x: 80, y: 480, w: 140, h: 80, color: "#1a1a2e", label: "🎨 Design Wall" },
+  { name: "coding", x: 80, y: 180, w: 280, h: 160, color: "#16213e", label: "💻 Dev Bay" },
+  { name: "review", x: 80, y: 400, w: 260, h: 140, color: "#1a1a2e", label: "👁️ Review Screens" },
+  { name: "design", x: 80, y: 600, w: 280, h: 140, color: "#1a1a2e", label: "🎨 Design Wall" },
   // Right wing - research/strategy
-  { name: "research", x: 960, y: 180, w: 140, h: 90, color: "#16213e", label: "🔍 Research Lab" },
-  { name: "library", x: 960, y: 340, w: 140, h: 90, color: "#0f3460", label: "📚 Think Tank" },
-  { name: "whiteboard", x: 960, y: 480, w: 140, h: 80, color: "#1a1a2e", label: "📋 Strategy Board" },
+  { name: "research", x: 1560, y: 180, w: 280, h: 160, color: "#16213e", label: "🔍 Research Lab" },
+  { name: "library", x: 1560, y: 400, w: 280, h: 160, color: "#0f3460", label: "📚 Think Tank" },
+  { name: "whiteboard", x: 1560, y: 620, w: 280, h: 140, color: "#1a1a2e", label: "📋 Strategy Board" },
   // Top - comms
-  { name: "studio", x: 380, y: 80, w: 130, h: 80, color: "#1a1a2e", label: "📸 Studio" },
-  { name: "mailroom", x: 700, y: 80, w: 130, h: 80, color: "#16213e", label: "📬 Mailroom" },
+  { name: "studio", x: 500, y: 80, w: 260, h: 140, color: "#1a1a2e", label: "📸 Studio" },
+  { name: "mailroom", x: 1160, y: 80, w: 260, h: 140, color: "#16213e", label: "📬 Mailroom" },
   // Bottom corners
-  { name: "filing", x: 80, y: 640, w: 140, h: 80, color: "#1a1a2e", label: "🗄️ Archives" },
-  { name: "coffee", x: 960, y: 640, w: 120, h: 70, color: "#2d1b4e", label: "☕ Coffee" },
+  { name: "filing", x: 80, y: 820, w: 260, h: 140, color: "#1a1a2e", label: "🗄️ Archives" },
+  { name: "coffee", x: 1560, y: 850, w: 240, h: 130, color: "#2d1b4e", label: "☕ Coffee" },
 ];
 
 // ─── Helpers ────────────────────────────────────────────────────
@@ -580,10 +580,35 @@ export default function AgentOffice() {
         ctx.ellipse(agent.x, agent.y + SPRITE_SIZE / 2 + 4, 16, 6, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Draw sprite
+        // Draw sprite with white outline
         if (agent.sprite && spritesLoadedRef.current) {
+          const sx = agent.x - SPRITE_SIZE / 2;
+          const sy = agent.y + bob - SPRITE_SIZE / 2;
+          // White outline (draw sprite offset in 8 directions)
           ctx.save();
-          // Active glow effect
+          ctx.globalCompositeOperation = "source-over";
+          // Create outline by drawing white-tinted copies
+          const outlineSize = 2;
+          ctx.filter = "brightness(0) invert(1)";
+          for (let ox = -outlineSize; ox <= outlineSize; ox++) {
+            for (let oy = -outlineSize; oy <= outlineSize; oy++) {
+              if (ox === 0 && oy === 0) continue;
+              if (agent.direction === "left") {
+                ctx.save();
+                ctx.translate(agent.x + ox, agent.y + bob - SPRITE_SIZE / 2 + oy);
+                ctx.scale(-1, 1);
+                ctx.drawImage(agent.sprite, -SPRITE_SIZE / 2, 0, SPRITE_SIZE, SPRITE_SIZE);
+                ctx.restore();
+              } else {
+                ctx.drawImage(agent.sprite, sx + ox, sy + oy, SPRITE_SIZE, SPRITE_SIZE);
+              }
+            }
+          }
+          ctx.filter = "none";
+          ctx.restore();
+
+          // Draw actual sprite on top
+          ctx.save();
           if (isActive) {
             ctx.shadowColor = "rgba(255, 140, 50, 0.6)";
             ctx.shadowBlur = 12;
@@ -595,8 +620,8 @@ export default function AgentOffice() {
           } else {
             ctx.drawImage(
               agent.sprite,
-              agent.x - SPRITE_SIZE / 2,
-              agent.y + bob - SPRITE_SIZE / 2,
+              sx,
+              sy,
               SPRITE_SIZE,
               SPRITE_SIZE
             );
@@ -769,11 +794,11 @@ export default function AgentOffice() {
         height={CANVAS_H}
         onClick={handleClick}
         style={{
-          border: "1px solid #1a2a4a",
-          borderRadius: 8,
+          border: "none",
+          borderRadius: 0,
           cursor: "pointer",
-          maxWidth: "95vw",
-          maxHeight: "85vh",
+          width: "100vw",
+          height: "100vh",
           imageRendering: "pixelated",
         }}
       />
