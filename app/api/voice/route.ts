@@ -75,7 +75,7 @@ function ensureConnection(): Promise<void> {
 
 export async function POST(req: Request) {
   try {
-    const { text } = await req.json();
+    const { text, context } = await req.json();
     if (!text?.trim()) {
       return NextResponse.json({ ok: false, error: "Empty transcript" }, { status: 400 });
     }
@@ -86,12 +86,19 @@ export async function POST(req: Request) {
       throw new Error("Gateway WebSocket not connected");
     }
 
+    // Build message with rolling context for continuity
+    let message = "";
+    if (Array.isArray(context) && context.length > 0) {
+      message += `[Context: ${context.join(" → ")}]\n`;
+    }
+    message += `[Voice] ${text}`;
+
     ws.send(JSON.stringify({
       type: "req",
       method: "chat.send",
       id: nextId(),
       params: {
-        message: `[Voice] ${text}`,
+        message,
         agentId: "wire",
       },
     }));

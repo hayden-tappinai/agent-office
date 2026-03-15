@@ -2,117 +2,278 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 
-// ─── Types ──────────────────────────────────────────────────────
-interface SpeechRecognitionEvent {
-  resultIndex: number;
-  results: SpeechRecognitionResultList;
-}
+// ─── Constants ──────────────────────────────────────────────────
+const SCRIBE_WS_URL = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
+const SENTENCE_REGEX = /[^.!?]*[.!?]+/g;
+const GROWTH_THRESHOLD = 40; // chars of new content before checking for sentences
+const MIN_CHUNK_LENGTH = 10;
+const CONTEXT_WINDOW_SIZE = 4; // rolling context of last N committed chunks
 
-interface SpeechRecognitionErrorEvent {
-  error: string;
-}
-
-// ─── Hook: useVoice ─────────────────────────────────────────────
-function useVoice(onFinal: (text: string) => void) {
+// ─── Hook: useScribeVoice ───────────────────────────────────────
+function useScribeVoice(onChunk: (text: string, context: string[]) => void) {
   const [listening, setListening] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [interim, setInterim] = useState("");
   const [hearingSpeech, setHearingSpeech] = useState(false);
-  const recognitionRef = useRef<any>(null);
-  const shouldRestartRef = useRef(false);
 
-  const start = useCallback(() => {
-    const SR =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
-    if (!SR) return;
+  const wsRef = useRef<WebSocket | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+  const processorNodeRef = useRef<ScriptProcessorNode | null>(null);
 
-    const r = new SR();
-    r.continuous = true;
-    r.interimResults = true;
-    r.lang = "en-US";
+  // Chunking state
+  const lastProcessedLengthRef = useRef(0);
+  const processedSentencesRef = useRef<Set<string>>(new Set());
+  const contextBufferRef = useRef<string[]>([]);
+  const partialTextRef = useRef("");
+  const vadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    r.onstart = () => {
-      setListening(true);
-    };
+  const onChunkRef = useRef(onChunk);
+  useEffect(() => { onChunkRef.current = onChunk; }, [onChunk]);
 
-    r.onspeechstart = () => setHearingSpeech(true);
-    r.onspeechend = () => setHearingSpeech(false);
+  const emitChunk = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (trimmed.length < MIN_CHUNK_LENGTH) return;
+    if (processedSentencesRef.current.has(trimmed)) return;
 
-    r.onresult = (e: SpeechRecognitionEvent) => {
-      let interimText = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const result = e.results[i];
-        if (result.isFinal) {
-          const text = result[0].transcript.trim();
-          if (text) onFinal(text);
-        } else {
-          interimText += result[0].transcript;
-        }
-      }
-      setInterim(interimText);
-    };
+    processedSentencesRef.current.add(trimmed);
+    const context = [...contextBufferRef.current];
+    onChunkRef.current(trimmed, context);
 
-    r.onerror = (e: SpeechRecognitionErrorEvent) => {
-      // "aborted" is normal when we stop manually; "no-speech" is benign
-      if (e.error === "aborted" || e.error === "no-speech") return;
-      console.warn("[Voice] SpeechRecognition error:", e.error);
-    };
-
-    r.onend = () => {
-      setHearingSpeech(false);
-      // Auto-restart for always-on (Chrome stops after silence; Safari stops at 60s)
-      if (shouldRestartRef.current) {
-        try {
-          r.start();
-        } catch {
-          // Already started or disposed — ignore
-        }
-      } else {
-        setListening(false);
-        setInterim("");
-      }
-    };
-
-    shouldRestartRef.current = true;
-    recognitionRef.current = r;
-    try {
-      r.start();
-    } catch {
-      // ignore
+    // Push to rolling context
+    contextBufferRef.current.push(trimmed);
+    if (contextBufferRef.current.length > CONTEXT_WINDOW_SIZE) {
+      contextBufferRef.current.shift();
     }
-  }, [onFinal]);
+  }, []);
+
+  const processSentences = useCallback((text: string) => {
+    const matches = text.match(SENTENCE_REGEX);
+    if (!matches) return;
+    for (const sentence of matches) {
+      emitChunk(sentence);
+    }
+  }, [emitChunk]);
+
+  const start = useCallback(async () => {
+    if (wsRef.current) return;
+    setConnecting(true);
+
+    try {
+      // 1. Get mic access
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 16000,
+        },
+      });
+      mediaStreamRef.current = stream;
+
+      // 2. Get single-use token from our API route
+      const tokenRes = await fetch("/api/scribe-token", { method: "POST" });
+      const tokenData = await tokenRes.json();
+      if (!tokenData.token) {
+        throw new Error(tokenData.error || "Failed to get scribe token");
+      }
+
+      // 3. Connect to Scribe WebSocket
+      const ws = new WebSocket(SCRIBE_WS_URL);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        // Send config message
+        ws.send(JSON.stringify({
+          type: "config",
+          token: tokenData.token,
+          model_id: "scribe_v2_realtime",
+          language_code: "en",
+          commit_strategy: "vad",
+        }));
+
+        // Reset chunking state
+        lastProcessedLengthRef.current = 0;
+        processedSentencesRef.current.clear();
+        partialTextRef.current = "";
+
+        setListening(true);
+        setConnecting(false);
+
+        // Start streaming audio
+        startAudioCapture(stream, ws);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+
+          if (msg.type === "partial_transcript" || msg.type === "transcript") {
+            const text = (msg.text || "").trim();
+            if (!text) return;
+
+            if (msg.type === "partial_transcript") {
+              partialTextRef.current = text;
+              setInterim(text);
+              setHearingSpeech(true);
+
+              // Reset VAD silence timer
+              if (vadTimerRef.current) clearTimeout(vadTimerRef.current);
+              vadTimerRef.current = setTimeout(() => setHearingSpeech(false), 1500);
+
+              // Check for sentences in partial if enough growth
+              if (text.length > lastProcessedLengthRef.current + GROWTH_THRESHOLD) {
+                processSentences(text);
+                lastProcessedLengthRef.current = text.length;
+              }
+            } else if (msg.type === "transcript") {
+              // Committed transcript from VAD
+              setInterim("");
+              partialTextRef.current = "";
+              lastProcessedLengthRef.current = 0;
+
+              if (text.length >= MIN_CHUNK_LENGTH) {
+                emitChunk(text);
+              }
+            }
+          }
+        } catch {
+          // ignore parse errors
+        }
+      };
+
+      ws.onerror = (e) => {
+        console.warn("[Scribe] WebSocket error:", e);
+      };
+
+      ws.onclose = () => {
+        setListening(false);
+        setConnecting(false);
+        setHearingSpeech(false);
+        wsRef.current = null;
+      };
+    } catch (err) {
+      console.warn("[Scribe] Start error:", err);
+      setConnecting(false);
+      cleanup();
+    }
+  }, [emitChunk, processSentences]);
+
+  const startAudioCapture = useCallback((stream: MediaStream, ws: WebSocket) => {
+    try {
+      const audioCtx = new AudioContext({ sampleRate: 16000 });
+      audioContextRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+
+      // Use ScriptProcessorNode (widely supported) for PCM capture
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      processorNodeRef.current = processor;
+
+      processor.onaudioprocess = (e) => {
+        if (ws.readyState !== WebSocket.OPEN) return;
+
+        const inputData = e.inputBuffer.getChannelData(0);
+        // Convert Float32 -> Int16 PCM
+        const pcm16 = new Int16Array(inputData.length);
+        for (let i = 0; i < inputData.length; i++) {
+          const s = Math.max(-1, Math.min(1, inputData[i]));
+          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+
+        // Send as base64 audio chunk
+        const bytes = new Uint8Array(pcm16.buffer);
+        const base64 = btoa(String.fromCharCode(...bytes));
+        ws.send(JSON.stringify({
+          type: "audio",
+          audio: base64,
+        }));
+      };
+
+      source.connect(processor);
+      processor.connect(audioCtx.destination);
+    } catch (err) {
+      console.warn("[Scribe] Audio capture error:", err);
+    }
+  }, []);
+
+  const cleanup = useCallback(() => {
+    if (vadTimerRef.current) {
+      clearTimeout(vadTimerRef.current);
+      vadTimerRef.current = null;
+    }
+    if (processorNodeRef.current) {
+      processorNodeRef.current.disconnect();
+      processorNodeRef.current = null;
+    }
+    if (workletNodeRef.current) {
+      workletNodeRef.current.disconnect();
+      workletNodeRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      mediaStreamRef.current = null;
+    }
+  }, []);
 
   const stop = useCallback(() => {
-    shouldRestartRef.current = false;
-    recognitionRef.current?.stop();
-    recognitionRef.current = null;
+    // Flush remaining partial text
+    const remaining = partialTextRef.current.trim();
+    if (remaining && remaining.length >= MIN_CHUNK_LENGTH) {
+      const sentences = remaining.match(SENTENCE_REGEX);
+      if (sentences) {
+        for (const s of sentences) {
+          emitChunk(s);
+        }
+      } else if (!processedSentencesRef.current.has(remaining)) {
+        emitChunk(remaining);
+      }
+    }
+
+    // Close WebSocket
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
+    cleanup();
+
+    // Reset state
+    partialTextRef.current = "";
+    lastProcessedLengthRef.current = 0;
+    processedSentencesRef.current.clear();
     setListening(false);
     setInterim("");
     setHearingSpeech(false);
-  }, []);
+  }, [cleanup, emitChunk]);
 
   const toggle = useCallback(() => {
-    if (listening) stop();
+    if (listening || connecting) stop();
     else start();
-  }, [listening, start, stop]);
+  }, [listening, connecting, start, stop]);
 
-  return { listening, interim, hearingSpeech, toggle };
+  return { listening, connecting, interim, hearingSpeech, toggle };
 }
 
 // ─── MicButton ──────────────────────────────────────────────────
 function MicButton({
   listening,
+  connecting,
   hearingSpeech,
   onClick,
 }: {
   listening: boolean;
+  connecting: boolean;
   hearingSpeech: boolean;
   onClick: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tRef = useRef(0);
 
-  // Animate VU bars + mic icon on canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -125,39 +286,35 @@ function MicButton({
       ctx.clearRect(0, 0, 56, 56);
       ctx.imageSmoothingEnabled = false;
 
-      const micColor = listening ? "#FFD700" : "#999999";
+      const micColor = connecting ? "#FF8C42" : listening ? "#FFD700" : "#999999";
 
-      // Draw pixel art microphone (centered, 16x24 native, 2x scale)
       const px = 2;
-      const ox = 12; // offset x
-      const oy = 6; // offset y
+      const ox = 12;
+      const oy = 6;
 
-      // Mic head (rounded top)
+      // Mic head
       ctx.fillStyle = micColor;
-      ctx.fillRect(ox + 4 * px, oy + 0 * px, 4 * px, 1 * px); // top
-      ctx.fillRect(ox + 3 * px, oy + 1 * px, 6 * px, 1 * px); // wider
+      ctx.fillRect(ox + 4 * px, oy + 0 * px, 4 * px, 1 * px);
+      ctx.fillRect(ox + 3 * px, oy + 1 * px, 6 * px, 1 * px);
       ctx.fillRect(ox + 3 * px, oy + 2 * px, 6 * px, 1 * px);
       ctx.fillRect(ox + 3 * px, oy + 3 * px, 6 * px, 1 * px);
-      // Mic body
       ctx.fillRect(ox + 3 * px, oy + 4 * px, 6 * px, 1 * px);
       ctx.fillRect(ox + 3 * px, oy + 5 * px, 6 * px, 1 * px);
       ctx.fillRect(ox + 3 * px, oy + 6 * px, 6 * px, 1 * px);
-      ctx.fillRect(ox + 4 * px, oy + 7 * px, 4 * px, 1 * px); // bottom rounded
-      // Mic cage lines (detail)
-      ctx.fillStyle = listening ? "#b8960a" : "#777777";
+      ctx.fillRect(ox + 4 * px, oy + 7 * px, 4 * px, 1 * px);
+      // Detail lines
+      ctx.fillStyle = connecting ? "#b86a20" : listening ? "#b8960a" : "#777777";
       ctx.fillRect(ox + 4 * px, oy + 3 * px, 4 * px, 1 * px);
       ctx.fillRect(ox + 4 * px, oy + 5 * px, 4 * px, 1 * px);
-      // Stand arc
+      // Stand
       ctx.fillStyle = micColor;
-      ctx.fillRect(ox + 2 * px, oy + 7 * px, 1 * px, 1 * px); // left arc
-      ctx.fillRect(ox + 9 * px, oy + 7 * px, 1 * px, 1 * px); // right arc
+      ctx.fillRect(ox + 2 * px, oy + 7 * px, 1 * px, 1 * px);
+      ctx.fillRect(ox + 9 * px, oy + 7 * px, 1 * px, 1 * px);
       ctx.fillRect(ox + 2 * px, oy + 8 * px, 1 * px, 1 * px);
       ctx.fillRect(ox + 9 * px, oy + 8 * px, 1 * px, 1 * px);
-      ctx.fillRect(ox + 3 * px, oy + 9 * px, 6 * px, 1 * px); // bottom of arc
-      // Stand post
+      ctx.fillRect(ox + 3 * px, oy + 9 * px, 6 * px, 1 * px);
       ctx.fillRect(ox + 5 * px, oy + 10 * px, 2 * px, 1 * px);
       ctx.fillRect(ox + 5 * px, oy + 11 * px, 2 * px, 1 * px);
-      // Base
       ctx.fillRect(ox + 3 * px, oy + 12 * px, 6 * px, 1 * px);
 
       // VU bars when hearing speech
@@ -171,12 +328,22 @@ function MicButton({
         }
       }
 
+      // Connecting spinner
+      if (connecting) {
+        const angle = t * 0.15;
+        ctx.strokeStyle = "#FF8C42";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(28, 28, 24, angle, angle + Math.PI * 1.2);
+        ctx.stroke();
+      }
+
       raf = requestAnimationFrame(draw);
     };
 
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [listening, hearingSpeech]);
+  }, [listening, connecting, hearingSpeech]);
 
   const prefersReduced =
     typeof window !== "undefined" &&
@@ -186,8 +353,9 @@ function MicButton({
     <button
       role="switch"
       aria-checked={listening}
-      aria-label="Microphone"
+      aria-label={connecting ? "Connecting microphone..." : "Microphone"}
       onClick={onClick}
+      disabled={connecting}
       style={{
         position: "fixed",
         bottom: 24,
@@ -195,10 +363,10 @@ function MicButton({
         width: 56,
         height: 56,
         zIndex: 1100,
-        border: `2px solid ${listening ? "#FFD700" : "#3a5a7a"}`,
+        border: `2px solid ${connecting ? "#FF8C42" : listening ? "#FFD700" : "#3a5a7a"}`,
         borderRadius: 8,
         background: "#1a1a2e",
-        cursor: "pointer",
+        cursor: connecting ? "wait" : "pointer",
         padding: 0,
         outline: "none",
         boxShadow:
@@ -210,6 +378,7 @@ function MicButton({
           listening && !prefersReduced
             ? "micPulse 1.5s infinite ease-in-out"
             : undefined,
+        opacity: connecting ? 0.8 : 1,
       }}
       onMouseDown={(e) => {
         (e.currentTarget as HTMLElement).style.transform = "scale(0.92)";
@@ -296,19 +465,16 @@ export default function VoiceOverlay({
   const [toast, setToast] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleFinal = useCallback(
-    async (text: string) => {
+  const handleChunk = useCallback(
+    async (text: string, context: string[]) => {
       setLastFinal(text);
       setTranscriptVisible(true);
       setGoldFlash(true);
 
-      // Clear existing fade timer
       if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
 
-      // Gold flash for 300ms
       setTimeout(() => setGoldFlash(false), 300);
 
-      // Fade after 5s of silence
       fadeTimerRef.current = setTimeout(() => {
         setTranscriptVisible(false);
         setTimeout(() => setLastFinal(""), 600);
@@ -317,12 +483,12 @@ export default function VoiceOverlay({
       // Notify canvas that WIRE is thinking
       onWireThinking(true, text);
 
-      // POST to /api/voice
+      // POST to /api/voice with rolling context
       try {
         const res = await fetch("/api/voice", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text, context }),
         });
         const data = await res.json();
         if (!data.ok) {
@@ -332,13 +498,14 @@ export default function VoiceOverlay({
         console.warn("[Voice] Fetch error:", err);
       }
 
-      // Clear thinking after a reasonable delay (WIRE will respond via activity polling)
+      // Clear thinking after a reasonable delay
       setTimeout(() => onWireThinking(false), 15000);
     },
     [onWireThinking]
   );
 
-  const { listening, interim, hearingSpeech, toggle } = useVoice(handleFinal);
+  const { listening, connecting, interim, hearingSpeech, toggle } =
+    useScribeVoice(handleChunk);
 
   // Show transcript area when interim text appears
   useEffect(() => {
@@ -348,7 +515,7 @@ export default function VoiceOverlay({
     }
   }, [interim]);
 
-  // Keyboard shortcut: M to toggle mic (when no input focused)
+  // Keyboard shortcut: M to toggle mic
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "m" || e.key === "M") {
@@ -362,8 +529,11 @@ export default function VoiceOverlay({
           return;
         toggle();
 
-        // Show toast
-        const msg = listening ? "🎙️ Mic off" : "🎙️ Mic on";
+        const msg = connecting
+          ? "🎙️ Connecting..."
+          : listening
+            ? "🎙️ Mic off"
+            : "🎙️ Mic on — Scribe v2";
         setToast(msg);
         if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
         toastTimerRef.current = setTimeout(() => setToast(null), 1500);
@@ -371,12 +541,13 @@ export default function VoiceOverlay({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [toggle, listening]);
+  }, [toggle, listening, connecting]);
 
   return (
     <>
       <MicButton
         listening={listening}
+        connecting={connecting}
         hearingSpeech={hearingSpeech}
         onClick={toggle}
       />
@@ -386,7 +557,6 @@ export default function VoiceOverlay({
         goldFlash={goldFlash}
         visible={transcriptVisible}
       />
-      {/* Toast for keyboard shortcut */}
       {toast && (
         <div
           style={{
