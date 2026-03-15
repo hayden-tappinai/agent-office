@@ -60,6 +60,7 @@ interface Agent {
   completedAt: number; // timestamp for fade-out
   // Coffee system
   coffeeCycleCounter: number;
+  coffeeThreshold: number; // set once per coffee cycle, not re-rolled each tick
   coffeeIconAlpha: number; // fades after returning from coffee
   hasCoffee: boolean;
 }
@@ -83,11 +84,14 @@ const AGENT_ROLES: Record<string, string> = {
   snap: "Media Producer", memo: "Scribe",
 };
 
-// Coffee frequency: how many idle cycles between coffee runs (lower = more frequent)
+// Coffee frequency: how many idle cycles before a coffee run (higher = rarer)
+// Coffee should be a RARE event — once every couple minutes for busy agents, less for quiet ones
 const COFFEE_FREQUENCY: Record<string, [number, number]> = {
-  wire: [3, 5], code: [3, 5], snap: [3, 5], hunt: [3, 5],   // busy agents
-  eyes: [5, 8], look: [5, 8], sage: [5, 8],                   // moderate
-  plan: [8, 12], mail: [8, 12], memo: [8, 12],                // less frequent
+  code: [20, 30], snap: [20, 30],                              // hardest workers, deserve coffee most
+  wire: [25, 35], hunt: [25, 35],                              // busy but slightly less
+  eyes: [40, 60], look: [40, 60], sage: [40, 60],             // moderate
+  plan: [50, 70],                                              // strategist, doesn't need much
+  mail: [80, 100], memo: [80, 100],                            // barely need coffee
 };
 
 const AGENT_SAYINGS: Record<string, string[]> = {
@@ -482,8 +486,8 @@ export default function AgentOffice() {
         loaded++;
         if (loaded === total) spritesLoadedRef.current = true;
       };
-      const freq = COFFEE_FREQUENCY[a.id] || [5, 8];
-      const coffeeThreshold = freq[0] + Math.floor(Math.random() * (freq[1] - freq[0] + 1));
+      const freq = COFFEE_FREQUENCY[a.id] || [40, 60];
+      const initialThreshold = freq[0] + Math.floor(Math.random() * (freq[1] - freq[0] + 1));
       return {
         id: a.id,
         name: a.name,
@@ -504,7 +508,8 @@ export default function AgentOffice() {
         activity: "idle" as AgentActivity,
         currentTask: "",
         completedAt: 0,
-        coffeeCycleCounter: Math.floor(Math.random() * coffeeThreshold), // stagger initial
+        coffeeCycleCounter: Math.floor(Math.random() * initialThreshold), // stagger initial
+        coffeeThreshold: initialThreshold, // set once, re-rolled only after coffee
         coffeeIconAlpha: 0,
         hasCoffee: false,
       };
@@ -869,12 +874,12 @@ export default function AgentOffice() {
           if (agent.stateTimer <= 0) {
             if (agent.state === "idle") {
               agent.coffeeCycleCounter++;
-              const freq = COFFEE_FREQUENCY[agent.id] || [5, 8];
-              const threshold = freq[0] + Math.floor(Math.random() * (freq[1] - freq[0] + 1));
 
-              if (agent.coffeeCycleCounter >= threshold) {
-                // Time for coffee!
+              if (agent.coffeeCycleCounter >= agent.coffeeThreshold) {
+                // Time for coffee! Reset counter and pick a new threshold for next time
                 agent.coffeeCycleCounter = 0;
+                const freq = COFFEE_FREQUENCY[agent.id] || [40, 60];
+                agent.coffeeThreshold = freq[0] + Math.floor(Math.random() * (freq[1] - freq[0] + 1));
                 const coffee = STATIONS.find((s) => s.name === "coffee")!;
                 const c = stationCenter(coffee);
                 agent.targetX = c.x + (Math.random() - 0.5) * 30;
