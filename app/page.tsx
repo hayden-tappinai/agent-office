@@ -1475,8 +1475,8 @@ export default function AgentOffice() {
             onClick={(e) => e.stopPropagation()}
             style={{
               position: "relative",
-              width: "min(85vw, 960px)",
-              height: "min(80vh, 640px)",
+              width: "95vw",
+              height: "92vh",
               borderRadius: 8,
               border: `2px solid ${AGENT_COLORS[interior.agentId] || "#fff"}`,
               overflow: "hidden",
