@@ -198,12 +198,12 @@ const LIGHT_THEME: Theme = {
 };
 
 const DARK_THEME: Theme = {
-  canvasBg: "#0a0a1a",
-  gridLine: "#151530",
+  canvasBg: "#1a1a2e",
+  gridLine: "rgba(255,255,255,0.05)",
   stationFallback: "#1a1a2e",
   stationStroke: "#1e3a5f",
   commandGlow: "#00d4ff",
-  stationLabel: "#4a6a8a",
+  stationLabel: "#e0e0e0",
   hudTitle: "#00d4ff",
   hudSub: "#3a5a7a",
   hudIdle: "#2a4a3a",
@@ -220,7 +220,7 @@ const DARK_THEME: Theme = {
   wireNameColor: "#00d4ff",
   warRoomLabel: "#4a3a6a",
   warRoomBorderIdle: "rgba(80, 60, 160, 0.2)",
-  warRoomFallbackBg: "rgba(100, 60, 200, 0.06)",
+  warRoomFallbackBg: "rgba(255, 255, 255, 0.02)",
   warRoomTableBg: "#15152a",
   warRoomTableStroke: "rgba(100, 80, 200, 0.25)",
   tooltipBg: "#0d1b2a",
@@ -250,32 +250,10 @@ interface OfficeProp {
   h: number;
 }
 
-const OFFICE_PROPS: OfficeProp[] = [
-  // Rug goes under the couch area (draw first so couch sits on top)
-  { name: "rug", src: "/props/rug.png", x: 460, y: 680, w: 80, h: 50 },
-  // Couch in lounge area between command center and war room
-  { name: "couch", src: "/props/couch.png", x: 480, y: 670, w: 60, h: 45 },
-  // Printer between Dev Bay and Review Screens (left side gap)
-  { name: "printer", src: "/props/printer.png", x: 180, y: 335, w: 45, h: 45 },
-  // Trash can near the printer
-  { name: "trash-can", src: "/props/trash-can.png", x: 250, y: 345, w: 35, h: 40 },
-  // Snack table in break area near lounge
-  { name: "snack-table", src: "/props/snack-table.png", x: 560, y: 660, w: 50, h: 45 },
-  // Water cooler near coffee station
-  { name: "water-cooler", src: "/props/water-cooler.png", x: 1500, y: 930, w: 40, h: 50 },
-  // Vending machine near coffee station
-  { name: "vending-machine", src: "/props/vending-machine.png", x: 1490, y: 860, w: 45, h: 55 },
-  // Wall clock upper wall area (between studio and mailroom)
-  { name: "wall-clock", src: "/props/wall-clock.png", x: 940, y: 15, w: 40, h: 40 },
-  // Office chairs scattered near war room / meeting area
-  { name: "office-chairs", src: "/props/office-chairs.png", x: 440, y: 810, w: 50, h: 45 },
-  // Plant 1: corner near research lab
-  { name: "plant-1", src: "/props/potted-plants.png", x: 1490, y: 130, w: 40, h: 50 },
-  // Plant 2: next to design wall
-  { name: "plant-2", src: "/props/potted-plants.png", x: 410, y: 660, w: 40, h: 50 },
-  // Plant 3: corner near whiteboard
-  { name: "plant-3", src: "/props/potted-plants.png", x: 1490, y: 650, w: 40, h: 50 },
-];
+// Props disabled — AI-generated PNGs have dirty transparency causing
+// checkerboard artifacts and dark fragments on dark canvas.
+// Re-enable when clean pixel-art props with proper alpha are available.
+const OFFICE_PROPS: OfficeProp[] = [];
 
 const WAR_ROOM = { x: 620, y: 780, w: 680, h: 260 };
 const WAR_ROOM_CENTER = { x: WAR_ROOM.x + WAR_ROOM.w / 2, y: WAR_ROOM.y + WAR_ROOM.h / 2 };
@@ -300,22 +278,23 @@ const AGENTS_DATA: {
 ];
 
 const STATIONS: Station[] = [
-  // Center command - WIRE (large, prominent)
-  { name: "command", x: 720, y: 360, w: 480, h: 260, color: "#1a1a2e", label: "⚡ Command Center" },
-  // Left wing - builders (bigger, spaced out)
-  { name: "coding", x: 40, y: 120, w: 360, h: 200, color: "#16213e", label: "💻 Dev Bay" },
-  { name: "review", x: 40, y: 380, w: 340, h: 200, color: "#1a1a2e", label: "👁️ Review Screens" },
-  { name: "design", x: 40, y: 640, w: 360, h: 200, color: "#1a1a2e", label: "🎨 Design Wall" },
-  // Right wing - research/strategy (bigger, spaced out)
-  { name: "research", x: 1520, y: 120, w: 360, h: 200, color: "#16213e", label: "🔍 Research Lab" },
-  { name: "library", x: 1520, y: 380, w: 360, h: 200, color: "#0f3460", label: "📚 Think Tank" },
-  { name: "whiteboard", x: 1520, y: 640, w: 360, h: 200, color: "#1a1a2e", label: "📋 Strategy Board" },
-  // Top - comms (bigger)
-  { name: "studio", x: 440, y: 60, w: 340, h: 200, color: "#1a1a2e", label: "📸 Studio" },
-  { name: "mailroom", x: 1140, y: 60, w: 340, h: 200, color: "#16213e", label: "📬 Mailroom" },
-  // Bottom corners (bigger)
-  { name: "filing", x: 40, y: 880, w: 340, h: 180, color: "#1a1a2e", label: "🗄️ Archives" },
-  { name: "coffee", x: 1540, y: 880, w: 340, h: 180, color: "#2d1b4e", label: "☕ Coffee" },
+  // Center command - WIRE (large, prominent) — pulled tighter
+  { name: "command", x: 680, y: 340, w: 560, h: 280, color: "#1a1a2e", label: "⚡ Command Center" },
+  // Upper left — coding + studio
+  { name: "coding", x: 40, y: 80, w: 340, h: 200, color: "#16213e", label: "💻 Dev Bay" },
+  { name: "studio", x: 400, y: 80, w: 260, h: 200, color: "#1a1a2e", label: "📸 Studio" },
+  // Upper right — mailroom + research
+  { name: "mailroom", x: 1260, y: 80, w: 260, h: 200, color: "#16213e", label: "📬 Mailroom" },
+  { name: "research", x: 1540, y: 80, w: 340, h: 200, color: "#16213e", label: "🔍 Research Lab" },
+  // Mid left — review + design
+  { name: "review", x: 40, y: 340, w: 320, h: 200, color: "#1a1a2e", label: "👁️ Review Screens" },
+  { name: "design", x: 40, y: 600, w: 320, h: 200, color: "#1a1a2e", label: "🎨 Design Wall" },
+  // Mid right — library + whiteboard
+  { name: "library", x: 1560, y: 340, w: 320, h: 200, color: "#0f3460", label: "📚 Think Tank" },
+  { name: "whiteboard", x: 1560, y: 600, w: 320, h: 200, color: "#1a1a2e", label: "📋 Strategy Board" },
+  // Bottom corners
+  { name: "filing", x: 40, y: 860, w: 320, h: 180, color: "#1a1a2e", label: "🗄️ Archives" },
+  { name: "coffee", x: 1560, y: 860, w: 320, h: 180, color: "#2d1b4e", label: "☕ Coffee" },
 ];
 
 // ─── Helpers ────────────────────────────────────────────────────
@@ -360,8 +339,8 @@ export default function AgentOffice() {
     y: number;
   } | null>(null);
   const [, setActiveCount] = useState(0);
-  const [isDark, setIsDark] = useState(false); // Light mode default
-  const themeRef = useRef<Theme>(LIGHT_THEME);
+  const [isDark, setIsDark] = useState(true); // Dark mode default
+  const themeRef = useRef<Theme>(DARK_THEME);
   const timeRef = useRef(0);
   const stationImagesRef = useRef<Record<string, HTMLImageElement>>({});
   const warRoomImageRef = useRef<HTMLImageElement | null>(null);
@@ -759,14 +738,26 @@ export default function AgentOffice() {
           ctx.strokeRect(s.x, s.y, s.w, s.h);
         }
 
-        ctx.fillStyle = theme.stationLabel;
-        ctx.font = "11px monospace";
-        ctx.textAlign = "center";
         // Add coffee count to station label
         const stationAgent = AGENTS_DATA.find((a) => a.station === s.name);
         const coffeeCount = stationAgent ? (coffeeCountsRef.current[stationAgent.id] || 0) : 0;
         const coffeeLabel = coffeeCount > 0 ? ` ☕×${coffeeCount}` : "";
-        ctx.fillText(s.label + coffeeLabel, s.x + s.w / 2, s.y - 6);
+        const labelText = s.label + coffeeLabel;
+        // Draw semi-transparent dark backing panel behind label
+        ctx.font = "bold 14px monospace";
+        ctx.textAlign = "center";
+        const labelW = ctx.measureText(labelText).width + 16;
+        const labelH = 22;
+        const labelX = s.x + s.w / 2 - labelW / 2;
+        const labelY = s.y - 24;
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.beginPath();
+        ctx.roundRect(labelX, labelY, labelW, labelH, 4);
+        ctx.fill();
+        // Check if station agent is active for orange treatment
+        const stationIsActive = stationAgent ? activeIds.has(stationAgent.id) : false;
+        ctx.fillStyle = stationIsActive ? "#ff8c32" : theme.stationLabel;
+        ctx.fillText(labelText, s.x + s.w / 2, s.y - 7);
       }
 
       // ─── Draw War Room ────────────────────────────────────
@@ -790,11 +781,13 @@ export default function AgentOffice() {
           ctx.save();
           ctx.imageSmoothingEnabled = false;
 
-          // Active glow underneath
+          // Active glow underneath — subtle, blends with dark floor
           if (warRoomActive) {
-            const pulseAlpha = 0.08 + 0.05 * Math.sin(t * 0.03);
+            const pulseAlpha = 0.04 + 0.03 * Math.sin(t * 0.03);
             ctx.fillStyle = `rgba(255, 100, 50, ${pulseAlpha})`;
-            ctx.fillRect(wr.x, wr.y, wr.w, wr.h);
+            ctx.beginPath();
+            ctx.roundRect(wr.x + 4, wr.y + 4, wr.w - 8, wr.h - 8, 8);
+            ctx.fill();
           }
 
           ctx.drawImage(wrImg, drawX, drawY, drawW, drawH);
@@ -811,12 +804,14 @@ export default function AgentOffice() {
           }
           ctx.restore();
         } else {
-          // Fallback procedural
-          const pulseAlpha = 0.06 + 0.04 * Math.sin(t * 0.03);
+          // Fallback procedural — subtle dark tint, no bright rectangle
+          const pulseAlpha = 0.03 + 0.02 * Math.sin(t * 0.03);
           ctx.fillStyle = warRoomActive
-            ? `rgba(255, 100, 50, ${pulseAlpha + 0.04})`
+            ? `rgba(255, 100, 50, ${pulseAlpha})`
             : theme.warRoomFallbackBg;
-          ctx.fillRect(wr.x, wr.y, wr.w, wr.h);
+          ctx.beginPath();
+          ctx.roundRect(wr.x + 4, wr.y + 4, wr.w - 8, wr.h - 8, 8);
+          ctx.fill();
           const tableW = 120; const tableH = 40;
           const tableX = WAR_ROOM_CENTER.x - tableW / 2;
           const tableY = WAR_ROOM_CENTER.y - tableH / 2;
@@ -827,24 +822,31 @@ export default function AgentOffice() {
           ctx.strokeRect(tableX, tableY, tableW, tableH);
         }
 
-        // War room border
+        // War room border — subtle dashed outline
         ctx.strokeStyle = warRoomActive
-          ? `rgba(255, 120, 40, ${0.4 + 0.2 * Math.sin(t * 0.03)})`
-          : theme.warRoomBorderIdle;
+          ? `rgba(255, 120, 40, ${0.2 + 0.1 * Math.sin(t * 0.03)})`
+          : "rgba(255, 255, 255, 0.06)";
         ctx.lineWidth = 1;
         ctx.setLineDash([6, 4]);
-        ctx.strokeRect(wr.x, wr.y, wr.w, wr.h);
+        ctx.beginPath();
+        ctx.roundRect(wr.x, wr.y, wr.w, wr.h, 8);
+        ctx.stroke();
         ctx.setLineDash([]);
 
-        // Label
-        ctx.fillStyle = warRoomActive ? "#ff8c32" : theme.warRoomLabel;
-        ctx.font = "bold 11px monospace";
+        // Label with dark backing panel
+        const wrLabelText = warRoomActive ? "🔥 WAR ROOM — ACTIVE" : "🔥 War Room";
+        ctx.font = "bold 14px monospace";
         ctx.textAlign = "center";
-        ctx.fillText(
-          warRoomActive ? "🔥 WAR ROOM — ACTIVE" : "🔥 War Room",
-          WAR_ROOM_CENTER.x,
-          wr.y - 6
-        );
+        const wrLabelW = ctx.measureText(wrLabelText).width + 16;
+        const wrLabelH = 22;
+        const wrLabelX = WAR_ROOM_CENTER.x - wrLabelW / 2;
+        const wrLabelY = wr.y - 24;
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.beginPath();
+        ctx.roundRect(wrLabelX, wrLabelY, wrLabelW, wrLabelH, 4);
+        ctx.fill();
+        ctx.fillStyle = warRoomActive ? "#ff8c32" : theme.stationLabel;
+        ctx.fillText(wrLabelText, WAR_ROOM_CENTER.x, wr.y - 7);
       }
 
       // Draw connection lines from command to active stations
@@ -1137,10 +1139,20 @@ export default function AgentOffice() {
         // Name tag (offset to avoid overlap in clusters)
         const lOff = labelOffsets[agent.id] || 0;
         const nameColor = isActive ? "#ff8c32" : agent.id === "wire" ? theme.wireNameColor : theme.nameFallback;
-        ctx.fillStyle = nameColor;
-        ctx.font = "bold 10px monospace";
+        // Agent name with dark backing panel
+        ctx.font = "bold 12px monospace";
         ctx.textAlign = "center";
-        ctx.fillText(agent.name, agent.x, agent.y - SPRITE_SIZE / 2 - 4 + bob + lOff);
+        const nameText = agent.name;
+        const nameW = ctx.measureText(nameText).width + 10;
+        const nameH = 18;
+        const nameX = agent.x - nameW / 2;
+        const nameY = agent.y - SPRITE_SIZE / 2 - 18 + bob + lOff;
+        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+        ctx.beginPath();
+        ctx.roundRect(nameX, nameY, nameW, nameH, 3);
+        ctx.fill();
+        ctx.fillStyle = nameColor;
+        ctx.fillText(nameText, agent.x, agent.y - SPRITE_SIZE / 2 - 4 + bob + lOff);
 
         // ─── Status indicators ──────────────────────────────
         if (isActive && agent.currentTask) {
