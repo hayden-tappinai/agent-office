@@ -597,16 +597,11 @@ export default function AgentOffice() {
           const sx = agent.x - SPRITE_SIZE / 2;
           const sy = agent.y + bob - SPRITE_SIZE / 2;
 
-          // Glowing halo BEHIND the agent (circular gradient)
+          // Solid white circle BEHIND the agent
           ctx.save();
-          const haloColor = isActive ? "rgba(255, 140, 50, 0.5)" : "rgba(80, 200, 255, 0.35)";
-          const haloGrad = ctx.createRadialGradient(agent.x, agent.y + bob, 0, agent.x, agent.y + bob, SPRITE_SIZE * 0.7);
-          haloGrad.addColorStop(0, haloColor);
-          haloGrad.addColorStop(0.6, isActive ? "rgba(255, 140, 50, 0.15)" : "rgba(80, 200, 255, 0.08)");
-          haloGrad.addColorStop(1, "transparent");
-          ctx.fillStyle = haloGrad;
+          ctx.fillStyle = "#ffffff";
           ctx.beginPath();
-          ctx.arc(agent.x, agent.y + bob, SPRITE_SIZE * 0.7, 0, Math.PI * 2);
+          ctx.arc(agent.x, agent.y + bob, SPRITE_SIZE * 0.55, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
 
