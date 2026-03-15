@@ -778,13 +778,13 @@ export default function AgentOffice() {
     <div
       style={{
         background: "#050510",
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
+        width: "100vw",
+        height: "100vh",
+        overflow: "hidden",
         position: "relative",
         fontFamily: "monospace",
+        margin: 0,
+        padding: 0,
       }}
     >
       <canvas
@@ -793,12 +793,10 @@ export default function AgentOffice() {
         height={CANVAS_H}
         onClick={handleClick}
         style={{
-          border: "none",
-          borderRadius: 0,
+          display: "block",
           cursor: "pointer",
-          width: "100vw",
-          height: "100vh",
-          objectFit: "contain",
+          width: "100%",
+          height: "100%",
           imageRendering: "pixelated",
         }}
       />
