@@ -597,11 +597,11 @@ export default function AgentOffice() {
           const sx = agent.x - SPRITE_SIZE / 2;
           const sy = agent.y + bob - SPRITE_SIZE / 2;
 
-          // Solid white circle BEHIND the agent
+          // Solid white opaque circle BEHIND the agent (1.2x sprite radius)
           ctx.save();
-          ctx.fillStyle = "#ffffff";
+          ctx.fillStyle = "rgba(255, 255, 255, 1.0)";
           ctx.beginPath();
-          ctx.arc(agent.x, agent.y + bob, SPRITE_SIZE * 0.55, 0, Math.PI * 2);
+          ctx.arc(agent.x, agent.y + bob, SPRITE_SIZE * 0.6, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
 
