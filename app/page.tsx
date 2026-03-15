@@ -339,8 +339,8 @@ export default function AgentOffice() {
     y: number;
   } | null>(null);
   const [, setActiveCount] = useState(0);
-  const [isDark, setIsDark] = useState(true); // Dark mode default
-  const themeRef = useRef<Theme>(DARK_THEME);
+  const [isDark, setIsDark] = useState(false); // Light mode default
+  const themeRef = useRef<Theme>(LIGHT_THEME);
   const timeRef = useRef(0);
   const stationImagesRef = useRef<Record<string, HTMLImageElement>>({});
   const warRoomImageRef = useRef<HTMLImageElement | null>(null);
