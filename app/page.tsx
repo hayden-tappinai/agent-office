@@ -1508,64 +1508,70 @@ export default function AgentOffice() {
               </div>
             )}
 
-            {/* Close button — overlaid top-right */}
+            {/* Close button — minimal, semi-transparent, overlaid top-right */}
             <button
               onClick={(e) => { e.stopPropagation(); closeInterior(); }}
               style={{
                 position: "absolute",
-                top: 16,
-                right: 16,
-                width: 40,
-                height: 40,
-                background: "rgba(0, 0, 0, 0.6)",
-                border: `2px solid ${AGENT_COLORS[interior.agentId] || "#fff"}`,
-                borderRadius: 4,
-                color: AGENT_COLORS[interior.agentId] || "#fff",
-                fontFamily: "'Press Start 2P', monospace",
-                fontSize: 16,
+                top: 20,
+                right: 20,
+                width: 36,
+                height: 36,
+                background: "rgba(0, 0, 0, 0.4)",
+                backdropFilter: "blur(8px)",
+                WebkitBackdropFilter: "blur(8px)",
+                border: "1px solid rgba(255, 255, 255, 0.15)",
+                borderRadius: 20,
+                color: "rgba(255, 255, 255, 0.8)",
+                fontFamily: "system-ui, sans-serif",
+                fontSize: 18,
+                fontWeight: 300,
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 zIndex: 3,
-                transition: "background 150ms, color 150ms",
+                transition: "background 200ms, color 200ms, transform 200ms",
               }}
               onMouseEnter={(e) => {
-                (e.target as HTMLElement).style.background = AGENT_COLORS[interior.agentId] || "#fff";
-                (e.target as HTMLElement).style.color = "#000";
+                (e.target as HTMLElement).style.background = "rgba(0, 0, 0, 0.7)";
+                (e.target as HTMLElement).style.color = "#fff";
+                (e.target as HTMLElement).style.transform = "scale(1.1)";
               }}
               onMouseLeave={(e) => {
-                (e.target as HTMLElement).style.background = "rgba(0, 0, 0, 0.6)";
-                (e.target as HTMLElement).style.color = AGENT_COLORS[interior.agentId] || "#fff";
+                (e.target as HTMLElement).style.background = "rgba(0, 0, 0, 0.4)";
+                (e.target as HTMLElement).style.color = "rgba(255, 255, 255, 0.8)";
+                (e.target as HTMLElement).style.transform = "scale(1)";
               }}
             >×</button>
 
-            {/* Info bar — overlaid at bottom */}
+            {/* Info bar — cinematic gradient strip overlaid at bottom */}
             <div style={{
               position: "absolute",
               bottom: 0,
               left: 0,
               right: 0,
-              height: 56,
-              background: "linear-gradient(transparent, rgba(0, 0, 0, 0.8))",
+              height: 100,
+              background: "linear-gradient(transparent 0%, rgba(0, 0, 0, 0.6) 60%, rgba(0, 0, 0, 0.85) 100%)",
               display: "flex",
-              alignItems: "center",
+              alignItems: "flex-end",
               justifyContent: "space-between",
-              padding: "0 24px",
+              padding: "0 32px 20px 32px",
               zIndex: 2,
               fontFamily: "'Press Start 2P', monospace",
+              pointerEvents: "none",
             }}>
               <span style={{
-                fontSize: 14,
+                fontSize: 16,
                 color: AGENT_COLORS[interior.agentId] || "#fff",
-                textShadow: "0 2px 8px rgba(0,0,0,0.8)",
+                textShadow: `0 2px 12px rgba(0,0,0,0.9), 0 0 20px ${AGENT_COLORS[interior.agentId] || "#fff"}40`,
               }}>
                 {AGENT_EMOJIS[interior.agentId]} {interior.agentId.toUpperCase()}
               </span>
               <span style={{
                 fontSize: 11,
-                color: "#f0e6d3",
-                textShadow: "0 2px 8px rgba(0,0,0,0.8)",
+                color: "rgba(240, 230, 211, 0.9)",
+                textShadow: "0 2px 8px rgba(0,0,0,0.9)",
               }}>
                 {AGENT_ROLES[interior.agentId] || "Agent"}
               </span>
