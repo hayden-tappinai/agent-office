@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 
 // ─── Types ──────────────────────────────────────────────────────
 interface Vec2 {
@@ -58,6 +58,51 @@ interface Agent {
   activity: AgentActivity;
   currentTask: string;
   completedAt: number; // timestamp for fade-out
+}
+
+// ─── Dialogue & Interior Data ───────────────────────────────────
+const AGENT_COLORS: Record<string, string> = {
+  wire: "#FFD700", code: "#00FF88", look: "#FF6B9D", hunt: "#FF8C42",
+  mail: "#42A5F5", plan: "#AB47BC", eyes: "#EF5350", sage: "#26A69A",
+  snap: "#FFEE58", memo: "#8D6E63",
+};
+
+const AGENT_EMOJIS: Record<string, string> = {
+  wire: "⚡", code: "💻", look: "🎨", hunt: "🔍",
+  mail: "📧", plan: "📋", eyes: "👁️", sage: "🧠",
+  snap: "📸", memo: "📝",
+};
+
+const AGENT_ROLES: Record<string, string> = {
+  wire: "CEO / Orchestrator", code: "Builder", look: "Designer", hunt: "Scout",
+  mail: "Comms", plan: "Strategist", eyes: "Code Critic", sage: "Advisor",
+  snap: "Media Producer", memo: "Scribe",
+};
+
+const AGENT_SAYINGS: Record<string, string[]> = {
+  wire: ["Every task needs an owner. That's why you have me.", "I don't write code. I write briefs.", "Nine agents. One mission. Zero excuses."],
+  code: ["Ship it or it didn't happen.", "If it compiles, it ships.", "I dream in TypeScript."],
+  hunt: ["The answer is out there. I just have to find it.", "Google fears me.", "Every rabbit hole has a treasure."],
+  snap: ["If I didn't record it, did it even happen?", "Every pixel tells a story.", "Lights. Camera. Automation."],
+  look: ["If it's not beautiful, it's not done.", "Whitespace is not wasted space.", "The grid is my religion."],
+  eyes: ["I've seen things you wouldn't believe... in your pull requests.", "LGTM means I actually looked.", "Your code is my morning newspaper."],
+  sage: ["The wise architect builds the foundation before the walls.", "Have you considered the edge cases?", "Complexity is the enemy of reliability."],
+  plan: ["A goal without a plan is just a wish.", "I see your sprint. I raise you a roadmap.", "Every minute planned saves ten in chaos."],
+  mail: ["You have unread mail. You always have unread mail.", "I sorted your inbox before you woke up.", "Reply all is never the answer."],
+  memo: ["If it's not written down, it didn't happen.", "Your future self will thank me.", "I remember so you don't have to."],
+};
+
+interface DialogueState {
+  agentId: string;
+  text: string;
+  displayedText: string;
+  isTyping: boolean;
+  charIndex: number;
+}
+
+interface InteriorState {
+  agentId: string;
+  loaded: boolean;
 }
 
 // ─── Theme ──────────────────────────────────────────────────────
@@ -267,10 +312,149 @@ export default function AgentOffice() {
   const stationImagesRef = useRef<Record<string, HTMLImageElement>>({});
   const warRoomImageRef = useRef<HTMLImageElement | null>(null);
 
+  // Dialogue state
+  const [dialogue, setDialogue] = useState<DialogueState | null>(null);
+  const dialogueRef = useRef<DialogueState | null>(null);
+  const lastSaidRef = useRef<Record<string, number>>({}); // agentId -> last saying index
+  const typewriterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Interior popup state
+  const [interior, setInterior] = useState<InteriorState | null>(null);
+  const interiorImageCache = useRef<Record<string, HTMLImageElement>>({});
+
   // Keep themeRef in sync
   useEffect(() => {
     themeRef.current = isDark ? DARK_THEME : LIGHT_THEME;
   }, [isDark]);
+
+  // ─── Dialogue helpers ──────────────────────────────────────────
+  const openDialogue = useCallback((agentId: string) => {
+    // Clear any existing typewriter
+    if (typewriterTimerRef.current) {
+      clearTimeout(typewriterTimerRef.current);
+      typewriterTimerRef.current = null;
+    }
+
+    // Close interior if open
+    setInterior(null);
+
+    // Pick a random saying (no repeat last)
+    const sayings = AGENT_SAYINGS[agentId] || ["..."];
+    const lastIndex = lastSaidRef.current[agentId] ?? -1;
+    let idx: number;
+    do {
+      idx = Math.floor(Math.random() * sayings.length);
+    } while (idx === lastIndex && sayings.length > 1);
+    lastSaidRef.current[agentId] = idx;
+
+    const text = sayings[idx];
+    const newDialogue: DialogueState = {
+      agentId,
+      text,
+      displayedText: "",
+      isTyping: true,
+      charIndex: 0,
+    };
+    setDialogue(newDialogue);
+    dialogueRef.current = newDialogue;
+  }, []);
+
+  const closeDialogue = useCallback(() => {
+    if (typewriterTimerRef.current) {
+      clearTimeout(typewriterTimerRef.current);
+      typewriterTimerRef.current = null;
+    }
+    setDialogue(null);
+    dialogueRef.current = null;
+  }, []);
+
+  // Typewriter effect
+  useEffect(() => {
+    if (!dialogue || !dialogue.isTyping) return;
+
+    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReduced) {
+      setDialogue((d) => d ? { ...d, displayedText: d.text, isTyping: false, charIndex: d.text.length } : null);
+      return;
+    }
+
+    const typeNext = () => {
+      setDialogue((prev) => {
+        if (!prev || !prev.isTyping) return prev;
+        if (prev.charIndex >= prev.text.length) {
+          return { ...prev, isTyping: false };
+        }
+
+        const char = prev.text[prev.charIndex];
+        const next = {
+          ...prev,
+          displayedText: prev.text.slice(0, prev.charIndex + 1),
+          charIndex: prev.charIndex + 1,
+        };
+
+        // Schedule next character with punctuation pauses
+        let delay = 35;
+        if (char === "," ) delay = 150;
+        else if (char === "." || char === "!" || char === "?") delay = 300;
+        else if (char === "—" || char === "…") delay = 200;
+
+        if (next.charIndex < next.text.length) {
+          typewriterTimerRef.current = setTimeout(typeNext, delay);
+        }
+
+        return next;
+      });
+    };
+
+    typewriterTimerRef.current = setTimeout(typeNext, 35);
+    return () => {
+      if (typewriterTimerRef.current) clearTimeout(typewriterTimerRef.current);
+    };
+  }, [dialogue?.agentId, dialogue?.text]); // Re-run when new dialogue opens
+
+  // ─── Interior helpers ─────────────────────────────────────────
+  const openInterior = useCallback((agentId: string) => {
+    // Close dialogue
+    closeDialogue();
+    // Lock body scroll
+    document.body.style.overflow = "hidden";
+
+    // Start loading image if not cached
+    const cached = interiorImageCache.current[agentId];
+    if (cached && cached.complete) {
+      setInterior({ agentId, loaded: true });
+    } else {
+      setInterior({ agentId, loaded: false });
+      const img = new Image();
+      img.src = `/interiors/interior-${agentId}.png`;
+      img.onload = () => {
+        interiorImageCache.current[agentId] = img;
+        setInterior((prev) => prev?.agentId === agentId ? { ...prev, loaded: true } : prev);
+      };
+      interiorImageCache.current[agentId] = img;
+    }
+  }, [closeDialogue]);
+
+  const closeInterior = useCallback(() => {
+    document.body.style.overflow = "";
+    setInterior(null);
+  }, []);
+
+  // Global key handler for Escape and dismiss
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (interior) {
+        if (e.key === "Escape") closeInterior();
+        return;
+      }
+      if (dialogue) {
+        // Any key dismisses dialogue
+        closeDialogue();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [dialogue, interior, closeDialogue, closeInterior]);
 
   // Load sprites + init agents
   useEffect(() => {
@@ -877,7 +1061,7 @@ export default function AgentOffice() {
     return () => cancelAnimationFrame(animId);
   }, []);
 
-  // Click handler
+  // Click handler — sprite clicks → dialogue, station clicks → interior
   const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -887,25 +1071,55 @@ export default function AgentOffice() {
     const mx = (e.clientX - rect.left) * scaleX;
     const my = (e.clientY - rect.top) * scaleY;
 
-    let found: Agent | null = null;
+    // Check if clicked on an agent sprite first (stopPropagation equivalent)
+    let foundAgent: Agent | null = null;
     for (const agent of agentsRef.current) {
       const d = dist({ x: mx, y: my }, { x: agent.x, y: agent.y });
       if (d < SPRITE_SIZE / 2 + 10) {
-        found = agent;
+        foundAgent = agent;
         break;
       }
     }
 
-    if (found) {
+    if (foundAgent) {
+      // Agent sprite click → dialogue
       setTooltip({
-        agent: { ...found },
+        agent: { ...foundAgent },
         x: e.clientX,
         y: e.clientY,
       });
-    } else {
-      setTooltip(null);
+      openDialogue(foundAgent.id);
+      return; // Don't check stations
     }
-  }, []);
+
+    // Dismiss tooltip
+    setTooltip(null);
+
+    // If dialogue is open, clicking outside dismisses it
+    if (dialogueRef.current) {
+      closeDialogue();
+      return;
+    }
+
+    // Check if clicked on a station area → interior popup
+    // Map station names to agent IDs
+    const stationToAgent: Record<string, string> = {
+      command: "wire", coding: "code", research: "hunt", studio: "snap",
+      design: "look", review: "eyes", library: "sage", whiteboard: "plan",
+      mailroom: "mail", filing: "memo",
+    };
+
+    for (const s of STATIONS) {
+      if (s.name === "coffee") continue; // Coffee station has no agent
+      if (mx >= s.x && mx <= s.x + s.w && my >= s.y && my <= s.y + s.h) {
+        const agentId = stationToAgent[s.name];
+        if (agentId) {
+          openInterior(agentId);
+        }
+        return;
+      }
+    }
+  }, [openDialogue, closeDialogue, openInterior]);
 
   return (
     <div
@@ -959,6 +1173,218 @@ export default function AgentOffice() {
       >
         {isDark ? "☀️ Light" : "🌙 Dark"}
       </button>
+      {/* ─── Dialogue Box ─────────────────────────────────────── */}
+      {dialogue && (
+        <div
+          role="dialog"
+          aria-label={`${dialogue.agentId.toUpperCase()} says: ${dialogue.text}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!dialogue.isTyping) {
+              closeDialogue();
+            } else {
+              // Click during typing → reveal all text
+              if (typewriterTimerRef.current) clearTimeout(typewriterTimerRef.current);
+              setDialogue((d) => d ? { ...d, displayedText: d.text, isTyping: false, charIndex: d.text.length } : null);
+            }
+          }}
+          style={{
+            position: "fixed",
+            bottom: 24,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: "min(90vw, 720px)",
+            minHeight: 120,
+            maxHeight: 160,
+            padding: "20px 24px",
+            background: "rgba(26, 26, 46, 0.95)",
+            border: `3px solid ${AGENT_COLORS[dialogue.agentId] || "#fff"}`,
+            borderRadius: 4,
+            zIndex: 1000,
+            fontFamily: "'Press Start 2P', 'Courier New', monospace",
+            animation: "dialogueSlideUp 250ms ease-out",
+            cursor: "pointer",
+            boxSizing: "border-box",
+          }}
+        >
+          <div style={{
+            fontSize: 10,
+            color: AGENT_COLORS[dialogue.agentId] || "#fff",
+            textTransform: "uppercase",
+            letterSpacing: "0.1em",
+            marginBottom: 12,
+          }}>
+            {AGENT_EMOJIS[dialogue.agentId]} {dialogue.agentId.toUpperCase()}
+          </div>
+          <div style={{
+            fontSize: 13,
+            color: "#f0e6d3",
+            lineHeight: 1.8,
+            minHeight: 40,
+          }}>
+            &ldquo;{dialogue.displayedText}&rdquo;
+            {!dialogue.isTyping && (
+              <span style={{
+                display: "inline-block",
+                marginLeft: 8,
+                animation: "cursorBlink 500ms infinite",
+                fontSize: 13,
+                color: "#f0e6d3",
+              }}>▼</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Interior Popup ───────────────────────────────────── */}
+      {interior && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={closeInterior}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0, 0, 0, 0.75)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            zIndex: 2000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            animation: "backdropFadeIn 200ms ease-out",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "relative",
+              width: "min(85vw, 960px)",
+              height: "min(80vh, 640px)",
+              borderRadius: 8,
+              border: `2px solid ${AGENT_COLORS[interior.agentId] || "#fff"}`,
+              overflow: "hidden",
+              animation: "interiorPop 300ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+              background: "#1a1a2e",
+            }}
+          >
+            {/* Interior image */}
+            {interior.loaded ? (
+              <img
+                src={`/interiors/interior-${interior.agentId}.png`}
+                alt={`${interior.agentId.toUpperCase()}'s office interior`}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  imageRendering: "pixelated",
+                  display: "block",
+                }}
+              />
+            ) : (
+              <div style={{
+                width: "100%",
+                height: "100%",
+                background: "linear-gradient(135deg, #1a1a2e 25%, #2a2a4e 50%, #1a1a2e 75%)",
+                backgroundSize: "200% 200%",
+                animation: "skeletonShimmer 1.5s infinite",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}>
+                <span style={{
+                  fontFamily: "'Press Start 2P', monospace",
+                  fontSize: 12,
+                  color: "#4a4a6e",
+                }}>Loading...</span>
+              </div>
+            )}
+
+            {/* Agent sprite overlay */}
+            <img
+              src={`/sprites/${interior.agentId}.png`}
+              alt={interior.agentId.toUpperCase()}
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                transform: "translate(-50%, -30%)",
+                width: SPRITE_SIZE * 1.5,
+                height: SPRITE_SIZE * 1.5,
+                imageRendering: "pixelated",
+                pointerEvents: "none",
+                zIndex: 2,
+              }}
+            />
+
+            {/* Close button */}
+            <button
+              onClick={(e) => { e.stopPropagation(); closeInterior(); }}
+              style={{
+                position: "absolute",
+                top: -12,
+                right: -12,
+                width: 32,
+                height: 32,
+                background: "#1a1a2e",
+                border: `2px solid ${AGENT_COLORS[interior.agentId] || "#fff"}`,
+                borderRadius: 4,
+                color: AGENT_COLORS[interior.agentId] || "#fff",
+                fontFamily: "'Press Start 2P', monospace",
+                fontSize: 14,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 3,
+                transition: "background 150ms, color 150ms",
+              }}
+              onMouseEnter={(e) => {
+                (e.target as HTMLElement).style.background = AGENT_COLORS[interior.agentId] || "#fff";
+                (e.target as HTMLElement).style.color = "#1a1a2e";
+              }}
+              onMouseLeave={(e) => {
+                (e.target as HTMLElement).style.background = "#1a1a2e";
+                (e.target as HTMLElement).style.color = AGENT_COLORS[interior.agentId] || "#fff";
+              }}
+            >×</button>
+
+            {/* Info bar */}
+            <div style={{
+              position: "absolute",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: 48,
+              background: "rgba(26, 26, 46, 0.85)",
+              borderTop: "1px solid rgba(240, 230, 211, 0.2)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "0 20px",
+              zIndex: 2,
+              fontFamily: "'Press Start 2P', monospace",
+            }}>
+              <span style={{
+                fontSize: 12,
+                color: AGENT_COLORS[interior.agentId] || "#fff",
+              }}>
+                {AGENT_EMOJIS[interior.agentId]} {interior.agentId.toUpperCase()}
+              </span>
+              <span style={{
+                fontSize: 10,
+                color: "#f0e6d3",
+              }}>
+                {AGENT_ROLES[interior.agentId] || "Agent"}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {tooltip && (
         <div
           style={{
