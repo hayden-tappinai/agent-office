@@ -176,7 +176,7 @@ export default function AgentOffice() {
         y: center.y + (Math.random() - 0.5) * 30,
         targetX: center.x,
         targetY: center.y,
-        speed: 0.6 + Math.random() * 0.4,
+        speed: 1.5 + Math.random() * 1.0,
         sprite: img,
         state: "idle",
         stateTimer: Math.random() * 300 + 100,
@@ -562,7 +562,7 @@ export default function AgentOffice() {
         const dx = agent.targetX - agent.x;
         const dy = agent.targetY - agent.y;
         const d = Math.sqrt(dx * dx + dy * dy);
-        const moveSpeed = isInWarRoom ? 1.2 : agent.speed; // Faster when heading to war room
+        const moveSpeed = isInWarRoom ? 3.5 : agent.speed; // Much faster when heading to war room
         if (d > 2) {
           agent.x += (dx / d) * moveSpeed;
           agent.y += (dy / d) * moveSpeed;
