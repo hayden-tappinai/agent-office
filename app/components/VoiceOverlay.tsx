@@ -184,7 +184,7 @@ function MicButton({
       ctx.clearRect(0, 0, 56, 56);
       ctx.imageSmoothingEnabled = false;
 
-      const micColor = connecting ? "#FF8C42" : listening ? "#4A9EF0" : "#999999";
+      const micColor = connecting ? "#FF8C42" : listening ? "#2563EB" : "#999999";
 
       const px = 2;
       const ox = 12;
@@ -201,7 +201,7 @@ function MicButton({
       ctx.fillRect(ox + 3 * px, oy + 6 * px, 6 * px, 1 * px);
       ctx.fillRect(ox + 4 * px, oy + 7 * px, 4 * px, 1 * px);
       // Detail lines
-      ctx.fillStyle = connecting ? "#b86a20" : listening ? "#3578b8" : "#777777";
+      ctx.fillStyle = connecting ? "#b86a20" : listening ? "#1E3A5F" : "#777777";
       ctx.fillRect(ox + 4 * px, oy + 3 * px, 4 * px, 1 * px);
       ctx.fillRect(ox + 4 * px, oy + 5 * px, 4 * px, 1 * px);
       // Stand
@@ -221,7 +221,7 @@ function MicButton({
           const barH = Math.sin(t * 0.12 + i * 1.2) * 6 + 7;
           const barX = 40 + i * 4;
           const barY = 28 - barH / 2;
-          ctx.fillStyle = "rgba(74, 158, 240, 0.8)";
+          ctx.fillStyle = "rgba(37, 99, 235, 0.8)";
           ctx.fillRect(barX, barY, 2, barH);
         }
       }
@@ -256,12 +256,12 @@ function MicButton({
       disabled={connecting}
       style={{
         position: "fixed",
-        bottom: 24,
-        right: 24,
+        top: "42%",
+        left: "64%",
         width: 56,
         height: 56,
         zIndex: 1100,
-        border: `2px solid ${connecting ? "#FF8C42" : listening ? "#4A9EF0" : "#3a5a7a"}`,
+        border: `2px solid ${connecting ? "#FF8C42" : listening ? "#2563EB" : "#3a5a7a"}`,
         borderRadius: 8,
         background: "#1a1a2e",
         cursor: connecting ? "wait" : "pointer",
@@ -269,7 +269,7 @@ function MicButton({
         outline: "none",
         boxShadow:
           listening && !prefersReduced
-            ? `0 0 0 ${4 + 4 * Math.abs(Math.sin(Date.now() * 0.003))}px rgba(74, 158, 240, 0.3)`
+            ? `0 0 0 ${4 + 4 * Math.abs(Math.sin(Date.now() * 0.003))}px rgba(37, 99, 235, 0.3)`
             : "0 2px 8px rgba(0,0,0,0.3)",
         transition: "border-color 200ms, transform 100ms",
         animation:
@@ -325,7 +325,7 @@ function TranscriptDisplay({
         maxHeight: 80,
         padding: "12px 16px",
         background: "rgba(26, 26, 46, 0.85)",
-        border: `1px solid ${goldFlash ? "rgba(74, 158, 240, 1)" : "rgba(74, 158, 240, 0.3)"}`,
+        border: `1px solid ${goldFlash ? "rgba(37, 99, 235, 1)" : "rgba(37, 99, 235, 0.3)"}`,
         borderRadius: 4,
         zIndex: 950,
         fontFamily: "'Press Start 2P', 'Courier New', monospace",
@@ -455,16 +455,16 @@ export default function VoiceOverlay({
         <div
           style={{
             position: "fixed",
-            bottom: 88,
-            right: 24,
+            top: "48%",
+            left: "64%",
             zIndex: 1100,
             background: "rgba(26, 26, 46, 0.9)",
-            border: "1px solid rgba(74, 158, 240, 0.4)",
+            border: "1px solid rgba(37, 99, 235, 0.4)",
             borderRadius: 4,
             padding: "6px 12px",
             fontFamily: "'Press Start 2P', monospace",
             fontSize: 10,
-            color: "#4A9EF0",
+            color: "#2563EB",
             animation: "dialogueSlideUp 150ms ease-out",
           }}
         >
