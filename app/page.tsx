@@ -63,10 +63,10 @@ interface Agent {
 // ─── Constants ──────────────────────────────────────────────────
 const CANVAS_W = 1920;
 const CANVAS_H = 1080;
-const SPRITE_SIZE = 72;
+const SPRITE_SIZE = 96;
 const TILE = 40;
 
-const WAR_ROOM = { x: 720, y: 750, w: 480, h: 200 };
+const WAR_ROOM = { x: 620, y: 780, w: 680, h: 260 };
 const WAR_ROOM_CENTER = { x: WAR_ROOM.x + WAR_ROOM.w / 2, y: WAR_ROOM.y + WAR_ROOM.h / 2 };
 
 const AGENTS_DATA: {
@@ -89,22 +89,22 @@ const AGENTS_DATA: {
 ];
 
 const STATIONS: Station[] = [
-  // Center command - WIRE
-  { name: "command", x: 800, y: 380, w: 320, h: 180, color: "#1a1a2e", label: "⚡ Command Center" },
-  // Left wing - builders
-  { name: "coding", x: 80, y: 180, w: 280, h: 160, color: "#16213e", label: "💻 Dev Bay" },
-  { name: "review", x: 80, y: 400, w: 260, h: 140, color: "#1a1a2e", label: "👁️ Review Screens" },
-  { name: "design", x: 80, y: 600, w: 280, h: 140, color: "#1a1a2e", label: "🎨 Design Wall" },
-  // Right wing - research/strategy
-  { name: "research", x: 1560, y: 180, w: 280, h: 160, color: "#16213e", label: "🔍 Research Lab" },
-  { name: "library", x: 1560, y: 400, w: 280, h: 160, color: "#0f3460", label: "📚 Think Tank" },
-  { name: "whiteboard", x: 1560, y: 620, w: 280, h: 140, color: "#1a1a2e", label: "📋 Strategy Board" },
-  // Top - comms
-  { name: "studio", x: 500, y: 80, w: 260, h: 140, color: "#1a1a2e", label: "📸 Studio" },
-  { name: "mailroom", x: 1160, y: 80, w: 260, h: 140, color: "#16213e", label: "📬 Mailroom" },
-  // Bottom corners
-  { name: "filing", x: 80, y: 820, w: 260, h: 140, color: "#1a1a2e", label: "🗄️ Archives" },
-  { name: "coffee", x: 1560, y: 850, w: 240, h: 130, color: "#2d1b4e", label: "☕ Coffee" },
+  // Center command - WIRE (large, prominent)
+  { name: "command", x: 720, y: 360, w: 480, h: 260, color: "#1a1a2e", label: "⚡ Command Center" },
+  // Left wing - builders (bigger, spaced out)
+  { name: "coding", x: 40, y: 120, w: 360, h: 200, color: "#16213e", label: "💻 Dev Bay" },
+  { name: "review", x: 40, y: 380, w: 340, h: 200, color: "#1a1a2e", label: "👁️ Review Screens" },
+  { name: "design", x: 40, y: 640, w: 360, h: 200, color: "#1a1a2e", label: "🎨 Design Wall" },
+  // Right wing - research/strategy (bigger, spaced out)
+  { name: "research", x: 1520, y: 120, w: 360, h: 200, color: "#16213e", label: "🔍 Research Lab" },
+  { name: "library", x: 1520, y: 380, w: 360, h: 200, color: "#0f3460", label: "📚 Think Tank" },
+  { name: "whiteboard", x: 1520, y: 640, w: 360, h: 200, color: "#1a1a2e", label: "📋 Strategy Board" },
+  // Top - comms (bigger)
+  { name: "studio", x: 440, y: 60, w: 340, h: 200, color: "#1a1a2e", label: "📸 Studio" },
+  { name: "mailroom", x: 1140, y: 60, w: 340, h: 200, color: "#16213e", label: "📬 Mailroom" },
+  // Bottom corners (bigger)
+  { name: "filing", x: 40, y: 880, w: 340, h: 180, color: "#1a1a2e", label: "🗄️ Archives" },
+  { name: "coffee", x: 1540, y: 880, w: 340, h: 180, color: "#2d1b4e", label: "☕ Coffee" },
 ];
 
 // ─── Helpers ────────────────────────────────────────────────────
@@ -132,8 +132,8 @@ function getWarRoomSlot(index: number, total: number): Vec2 {
   if (total <= 1) return { x: cx, y: cy - 10 };
   const angleStart = -Math.PI / 2;
   const angle = angleStart + (index / total) * Math.PI * 2;
-  const rx = 70;
-  const ry = 35;
+  const rx = 120;
+  const ry = 55;
   return { x: cx + Math.cos(angle) * rx, y: cy + Math.sin(angle) * ry };
 }
 
@@ -148,7 +148,7 @@ export default function AgentOffice() {
     x: number;
     y: number;
   } | null>(null);
-  const [activeCount, setActiveCount] = useState(0);
+  const [, setActiveCount] = useState(0);
   const timeRef = useRef(0);
   const stationImagesRef = useRef<Record<string, HTMLImageElement>>({});
   const warRoomImageRef = useRef<HTMLImageElement | null>(null);
@@ -329,7 +329,7 @@ export default function AgentOffice() {
             drawW = drawH * imgAspect;
           }
           // Ensure minimum recognizable size
-          if (drawW < 80) { drawW = 80; drawH = drawW / imgAspect; }
+          if (drawW < 160) { drawW = 160; drawH = drawW / imgAspect; }
           const drawX = s.x + s.w / 2 - drawW / 2;
           const drawY = s.y + s.h / 2 - drawH / 2;
 
@@ -781,10 +781,12 @@ export default function AgentOffice() {
         width: "100vw",
         height: "100vh",
         overflow: "hidden",
-        position: "relative",
-        fontFamily: "monospace",
+        position: "absolute",
+        top: 0,
+        left: 0,
         margin: 0,
         padding: 0,
+        fontFamily: "monospace",
       }}
     >
       <canvas
@@ -793,10 +795,13 @@ export default function AgentOffice() {
         height={CANVAS_H}
         onClick={handleClick}
         style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
           display: "block",
           cursor: "pointer",
-          width: "100%",
-          height: "100%",
           imageRendering: "pixelated",
         }}
       />
@@ -853,16 +858,6 @@ export default function AgentOffice() {
           </div>
         </div>
       )}
-      <div
-        style={{
-          color: "#2a4a6a",
-          fontSize: 11,
-          marginTop: 12,
-          textAlign: "center",
-        }}
-      >
-        Click any agent to see their status • {activeCount > 0 ? `🔥 ${activeCount} active` : "💤 All idle"} • Built with ❤️ by TappinAI
-      </div>
     </div>
   );
 }
