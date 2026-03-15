@@ -240,6 +240,43 @@ const CANVAS_H = 1080;
 const SPRITE_SIZE = 96;
 const TILE = 40;
 
+// ─── Office Props (placed between stations) ────────────────────
+interface OfficeProp {
+  name: string;
+  src: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+const OFFICE_PROPS: OfficeProp[] = [
+  // Rug goes under the couch area (draw first so couch sits on top)
+  { name: "rug", src: "/props/rug.png", x: 460, y: 680, w: 80, h: 50 },
+  // Couch in lounge area between command center and war room
+  { name: "couch", src: "/props/couch.png", x: 480, y: 670, w: 60, h: 45 },
+  // Printer between Dev Bay and Review Screens (left side gap)
+  { name: "printer", src: "/props/printer.png", x: 180, y: 335, w: 45, h: 45 },
+  // Trash can near the printer
+  { name: "trash-can", src: "/props/trash-can.png", x: 250, y: 345, w: 35, h: 40 },
+  // Snack table in break area near lounge
+  { name: "snack-table", src: "/props/snack-table.png", x: 560, y: 660, w: 50, h: 45 },
+  // Water cooler near coffee station
+  { name: "water-cooler", src: "/props/water-cooler.png", x: 1500, y: 930, w: 40, h: 50 },
+  // Vending machine near coffee station
+  { name: "vending-machine", src: "/props/vending-machine.png", x: 1490, y: 860, w: 45, h: 55 },
+  // Wall clock upper wall area (between studio and mailroom)
+  { name: "wall-clock", src: "/props/wall-clock.png", x: 940, y: 15, w: 40, h: 40 },
+  // Office chairs scattered near war room / meeting area
+  { name: "office-chairs", src: "/props/office-chairs.png", x: 440, y: 810, w: 50, h: 45 },
+  // Plant 1: corner near research lab
+  { name: "plant-1", src: "/props/potted-plants.png", x: 1490, y: 130, w: 40, h: 50 },
+  // Plant 2: next to design wall
+  { name: "plant-2", src: "/props/potted-plants.png", x: 410, y: 660, w: 40, h: 50 },
+  // Plant 3: corner near whiteboard
+  { name: "plant-3", src: "/props/potted-plants.png", x: 1490, y: 650, w: 40, h: 50 },
+];
+
 const WAR_ROOM = { x: 620, y: 780, w: 680, h: 260 };
 const WAR_ROOM_CENTER = { x: WAR_ROOM.x + WAR_ROOM.w / 2, y: WAR_ROOM.y + WAR_ROOM.h / 2 };
 
@@ -330,6 +367,7 @@ export default function AgentOffice() {
   const warRoomImageRef = useRef<HTMLImageElement | null>(null);
   const coffeeCountsRef = useRef<Record<string, number>>({});
   const wavingSpritesRef = useRef<Record<string, HTMLImageElement>>({});
+  const propImagesRef = useRef<Record<string, HTMLImageElement>>({});
   const hoveredAgentRef = useRef<string | null>(null);
   const mouseCanvasRef = useRef<Vec2 | null>(null);
 
@@ -562,6 +600,16 @@ export default function AgentOffice() {
     const wrImg = new Image();
     wrImg.src = "/station-warroom.png";
     warRoomImageRef.current = wrImg;
+
+    // Pre-load office prop images
+    const seenSrcs = new Set<string>();
+    for (const prop of OFFICE_PROPS) {
+      if (seenSrcs.has(prop.src)) continue;
+      seenSrcs.add(prop.src);
+      const pImg = new Image();
+      pImg.src = prop.src;
+      propImagesRef.current[prop.src] = pImg;
+    }
   }, []);
 
   // Poll /api/activity every 5 seconds
@@ -833,6 +881,17 @@ export default function AgentOffice() {
             ctx.stroke();
             ctx.setLineDash([]);
           }
+        }
+      }
+
+      // ─── Draw office props (before agents, after floor/stations) ──
+      for (const prop of OFFICE_PROPS) {
+        const pImg = propImagesRef.current[prop.src];
+        if (pImg && pImg.complete && pImg.naturalWidth > 0) {
+          ctx.save();
+          ctx.imageSmoothingEnabled = false; // Keep pixel art crisp
+          ctx.drawImage(pImg, prop.x, prop.y, prop.w, prop.h);
+          ctx.restore();
         }
       }
 
