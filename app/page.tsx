@@ -577,8 +577,20 @@ export default function AgentOffice() {
           ? "rgba(255, 100, 30, 0.15)"
           : "rgba(0, 100, 200, 0.1)";
         ctx.beginPath();
-        ctx.ellipse(agent.x, agent.y + SPRITE_SIZE / 2 + 4, 16, 6, 0, 0, Math.PI * 2);
+        ctx.ellipse(agent.x, agent.y + SPRITE_SIZE / 2 + 4, 24, 10, 0, 0, Math.PI * 2);
         ctx.fill();
+
+        // Glowing floor spotlight under agent
+        ctx.save();
+        const spotColor = isActive ? "rgba(255, 140, 50, 0.35)" : "rgba(80, 180, 255, 0.25)";
+        const spotGrad = ctx.createRadialGradient(agent.x, agent.y + SPRITE_SIZE / 2, 0, agent.x, agent.y + SPRITE_SIZE / 2, 44);
+        spotGrad.addColorStop(0, spotColor);
+        spotGrad.addColorStop(1, "transparent");
+        ctx.fillStyle = spotGrad;
+        ctx.beginPath();
+        ctx.ellipse(agent.x, agent.y + SPRITE_SIZE / 2 + 2, 44, 18, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
 
         // Draw sprite with white outline
         if (agent.sprite && spritesLoadedRef.current) {
@@ -588,7 +600,7 @@ export default function AgentOffice() {
           ctx.save();
           ctx.globalCompositeOperation = "source-over";
           // Create outline by drawing white-tinted copies
-          const outlineSize = 2;
+          const outlineSize = 3;
           ctx.filter = "brightness(0) invert(1)";
           for (let ox = -outlineSize; ox <= outlineSize; ox++) {
             for (let oy = -outlineSize; oy <= outlineSize; oy++) {
@@ -799,6 +811,7 @@ export default function AgentOffice() {
           cursor: "pointer",
           width: "100vw",
           height: "100vh",
+          objectFit: "contain",
           imageRendering: "pixelated",
         }}
       />
