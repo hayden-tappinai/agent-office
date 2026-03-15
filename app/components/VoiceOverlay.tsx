@@ -310,7 +310,7 @@ function TranscriptDisplay({
       aria-live="polite"
       style={{
         position: "fixed",
-        bottom: 200,
+        top: 140,
         left: "50%",
         transform: "translateX(-50%)",
         width: "min(80vw, 640px)",
