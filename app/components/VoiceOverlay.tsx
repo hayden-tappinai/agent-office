@@ -5,8 +5,9 @@ import { useScribe, CommitStrategy } from "@elevenlabs/react";
 
 // ─── Constants ──────────────────────────────────────────────────
 const SENTENCE_REGEX = /[^.!?]*[.!?]+/g;
-const GROWTH_THRESHOLD = 40;
-const MIN_CHUNK_LENGTH = 10;
+const GROWTH_THRESHOLD = 120;
+const MIN_CHUNK_LENGTH = 50;
+const COMMIT_DEBOUNCE_MS = 4000;
 const CONTEXT_WINDOW_SIZE = 4;
 
 // ─── Hook: useScribeVoice ───────────────────────────────────────
@@ -20,6 +21,8 @@ function useScribeVoice(onChunk: (text: string, context: string[]) => void) {
   const processedSentencesRef = useRef<Set<string>>(new Set());
   const contextBufferRef = useRef<string[]>([]);
   const vadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const commitBufferRef = useRef<string[]>([]);
+  const commitDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const onChunkRef = useRef(onChunk);
   useEffect(() => { onChunkRef.current = onChunk; }, [onChunk]);
@@ -70,9 +73,20 @@ function useScribeVoice(onChunk: (text: string, context: string[]) => void) {
       setInterim("");
       lastProcessedLengthRef.current = 0;
 
-      if (text.length >= MIN_CHUNK_LENGTH) {
-        emitChunk(text);
-      }
+      if (!text) return;
+
+      // Buffer committed transcripts and debounce — accumulate full thoughts
+      commitBufferRef.current.push(text);
+
+      if (commitDebounceRef.current) clearTimeout(commitDebounceRef.current);
+      commitDebounceRef.current = setTimeout(() => {
+        const buffered = commitBufferRef.current.join(" ").trim();
+        commitBufferRef.current = [];
+        commitDebounceRef.current = null;
+        if (buffered.length >= MIN_CHUNK_LENGTH) {
+          emitChunk(buffered);
+        }
+      }, COMMIT_DEBOUNCE_MS);
     },
   });
 
@@ -140,6 +154,19 @@ function useScribeVoice(onChunk: (text: string, context: string[]) => void) {
     if (vadTimerRef.current) {
       clearTimeout(vadTimerRef.current);
       vadTimerRef.current = null;
+    }
+
+    // Flush any buffered committed transcripts immediately on stop
+    if (commitDebounceRef.current) {
+      clearTimeout(commitDebounceRef.current);
+      commitDebounceRef.current = null;
+    }
+    if (commitBufferRef.current.length > 0) {
+      const buffered = commitBufferRef.current.join(" ").trim();
+      commitBufferRef.current = [];
+      if (buffered.length >= MIN_CHUNK_LENGTH) {
+        emitChunk(buffered);
+      }
     }
 
     lastProcessedLengthRef.current = 0;
