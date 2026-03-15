@@ -85,13 +85,14 @@ const AGENT_ROLES: Record<string, string> = {
 };
 
 // Coffee frequency: how many idle cycles before a coffee run (higher = rarer)
-// Coffee should be a RARE event — once every couple minutes for busy agents, less for quiet ones
+// Each idle cycle is ~3-5 seconds, so 720-1200 idle cycles ≈ 1 hour.
+// Target: busiest agents get coffee ~once/hour, quiet agents almost never.
 const COFFEE_FREQUENCY: Record<string, [number, number]> = {
-  code: [20, 30], snap: [20, 30],                              // hardest workers, deserve coffee most
-  wire: [25, 35], hunt: [25, 35],                              // busy but slightly less
-  eyes: [40, 60], look: [40, 60], sage: [40, 60],             // moderate
-  plan: [50, 70],                                              // strategist, doesn't need much
-  mail: [80, 100], memo: [80, 100],                            // barely need coffee
+  code: [500, 700], snap: [500, 700],                          // hardest workers, ~1 coffee/hour
+  wire: [600, 800], hunt: [600, 800],                          // busy but slightly less
+  eyes: [800, 1000], look: [800, 1000], sage: [800, 1000],    // moderate
+  plan: [900, 1200],                                           // strategist, rarely needs coffee
+  mail: [1500, 2000], memo: [1500, 2000],                      // barely ever
 };
 
 const AGENT_SAYINGS: Record<string, string[]> = {
