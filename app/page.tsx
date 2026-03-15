@@ -150,6 +150,8 @@ export default function AgentOffice() {
   } | null>(null);
   const [activeCount, setActiveCount] = useState(0);
   const timeRef = useRef(0);
+  const stationImagesRef = useRef<Record<string, HTMLImageElement>>({});
+  const warRoomImageRef = useRef<HTMLImageElement | null>(null);
 
   // Load sprites + init agents
   useEffect(() => {
@@ -189,6 +191,29 @@ export default function AgentOffice() {
     });
 
     agentsRef.current = agents;
+
+    // Load station images
+    const stationImageMap: Record<string, string> = {
+      command: "/station-wire.png",
+      coding: "/station-code.png",
+      research: "/station-hunt.png",
+      studio: "/station-snap.png",
+      design: "/station-look.png",
+      review: "/station-eyes.png",
+      library: "/station-sage.png",
+      whiteboard: "/station-plan.png",
+      mailroom: "/station-mail.png",
+      filing: "/station-memo.png",
+      coffee: "/station-coffee.png",
+    };
+    for (const [stationName, src] of Object.entries(stationImageMap)) {
+      const img = new Image();
+      img.src = src;
+      stationImagesRef.current[stationName] = img;
+    }
+    const wrImg = new Image();
+    wrImg.src = "/station-warroom.png";
+    warRoomImageRef.current = wrImg;
   }, []);
 
   // Poll /api/activity every 5 seconds
@@ -293,22 +318,44 @@ export default function AgentOffice() {
 
       // Draw stations
       for (const s of STATIONS) {
-        ctx.fillStyle = s.color;
-        ctx.fillRect(s.x, s.y, s.w, s.h);
+        const stationImg = stationImagesRef.current[s.name];
+        if (stationImg && stationImg.complete && stationImg.naturalWidth > 0) {
+          // Draw the pixel art station image, scaled to fit the station area
+          const imgAspect = stationImg.naturalWidth / stationImg.naturalHeight;
+          let drawW = s.w;
+          let drawH = s.w / imgAspect;
+          if (drawH > s.h + 20) {
+            drawH = s.h + 20;
+            drawW = drawH * imgAspect;
+          }
+          // Ensure minimum recognizable size
+          if (drawW < 80) { drawW = 80; drawH = drawW / imgAspect; }
+          const drawX = s.x + s.w / 2 - drawW / 2;
+          const drawY = s.y + s.h / 2 - drawH / 2;
 
-        const glow = s.name === "command" ? "#00d4ff" : "#1e3a5f";
-        ctx.strokeStyle = glow;
-        ctx.lineWidth = s.name === "command" ? 2 : 1;
-        ctx.strokeRect(s.x, s.y, s.w, s.h);
+          ctx.save();
+          ctx.imageSmoothingEnabled = false; // Keep pixel art crisp
+          ctx.drawImage(stationImg, drawX, drawY, drawW, drawH);
 
-        if (s.name === "command") {
-          const scanY = s.y + ((t * 0.5) % s.h);
-          ctx.strokeStyle = "rgba(0, 212, 255, 0.15)";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(s.x, scanY);
-          ctx.lineTo(s.x + s.w, scanY);
-          ctx.stroke();
+          // Subtle glow for command center
+          if (s.name === "command") {
+            const glowAlpha = 0.12 + 0.06 * Math.sin(t * 0.04);
+            ctx.shadowColor = "#00d4ff";
+            ctx.shadowBlur = 16;
+            ctx.globalAlpha = glowAlpha;
+            ctx.drawImage(stationImg, drawX, drawY, drawW, drawH);
+            ctx.globalAlpha = 1;
+            ctx.shadowBlur = 0;
+          }
+          ctx.restore();
+        } else {
+          // Fallback to procedural drawing while images load
+          ctx.fillStyle = s.color;
+          ctx.fillRect(s.x, s.y, s.w, s.h);
+          const glow = s.name === "command" ? "#00d4ff" : "#1e3a5f";
+          ctx.strokeStyle = glow;
+          ctx.lineWidth = s.name === "command" ? 2 : 1;
+          ctx.strokeRect(s.x, s.y, s.w, s.h);
         }
 
         ctx.fillStyle = "#4a6a8a";
@@ -320,38 +367,59 @@ export default function AgentOffice() {
       // ─── Draw War Room ────────────────────────────────────
       {
         const wr = WAR_ROOM;
-        // Glowing floor tiles
-        const pulseAlpha = 0.06 + 0.04 * Math.sin(t * 0.03);
         const warRoomActive = anyActive;
+        const wrImg = warRoomImageRef.current;
 
-        if (warRoomActive) {
-          // Bright glow when agents are active
-          ctx.fillStyle = `rgba(255, 100, 50, ${pulseAlpha + 0.04})`;
+        if (wrImg && wrImg.complete && wrImg.naturalWidth > 0) {
+          // Draw war room image centered in the war room area
+          const imgAspect = wrImg.naturalWidth / wrImg.naturalHeight;
+          let drawW = wr.w;
+          let drawH = wr.w / imgAspect;
+          if (drawH > wr.h + 30) {
+            drawH = wr.h + 30;
+            drawW = drawH * imgAspect;
+          }
+          const drawX = WAR_ROOM_CENTER.x - drawW / 2;
+          const drawY = WAR_ROOM_CENTER.y - drawH / 2;
+
+          ctx.save();
+          ctx.imageSmoothingEnabled = false;
+
+          // Active glow underneath
+          if (warRoomActive) {
+            const pulseAlpha = 0.08 + 0.05 * Math.sin(t * 0.03);
+            ctx.fillStyle = `rgba(255, 100, 50, ${pulseAlpha})`;
+            ctx.fillRect(wr.x, wr.y, wr.w, wr.h);
+          }
+
+          ctx.drawImage(wrImg, drawX, drawY, drawW, drawH);
+
+          // Active overlay glow
+          if (warRoomActive) {
+            const hGlow = 0.08 + 0.06 * Math.sin(t * 0.06);
+            ctx.shadowColor = "rgba(255, 140, 50, 0.8)";
+            ctx.shadowBlur = 20;
+            ctx.globalAlpha = hGlow;
+            ctx.drawImage(wrImg, drawX, drawY, drawW, drawH);
+            ctx.globalAlpha = 1;
+            ctx.shadowBlur = 0;
+          }
+          ctx.restore();
         } else {
-          ctx.fillStyle = `rgba(100, 60, 200, ${pulseAlpha})`;
-        }
-        ctx.fillRect(wr.x, wr.y, wr.w, wr.h);
-
-        // Table in center
-        const tableW = 120;
-        const tableH = 40;
-        const tableX = WAR_ROOM_CENTER.x - tableW / 2;
-        const tableY = WAR_ROOM_CENTER.y - tableH / 2;
-        ctx.fillStyle = warRoomActive ? "#2a1510" : "#15152a";
-        ctx.fillRect(tableX, tableY, tableW, tableH);
-
-        // Table glow
-        ctx.strokeStyle = warRoomActive
-          ? `rgba(255, 140, 50, ${0.5 + 0.3 * Math.sin(t * 0.04)})`
-          : "rgba(100, 80, 200, 0.25)";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(tableX, tableY, tableW, tableH);
-
-        // Holographic glow on table when active
-        if (warRoomActive) {
-          const hGlow = 0.1 + 0.08 * Math.sin(t * 0.06);
-          ctx.fillStyle = `rgba(255, 180, 80, ${hGlow})`;
-          ctx.fillRect(tableX + 4, tableY + 4, tableW - 8, tableH - 8);
+          // Fallback procedural
+          const pulseAlpha = 0.06 + 0.04 * Math.sin(t * 0.03);
+          ctx.fillStyle = warRoomActive
+            ? `rgba(255, 100, 50, ${pulseAlpha + 0.04})`
+            : `rgba(100, 60, 200, ${pulseAlpha})`;
+          ctx.fillRect(wr.x, wr.y, wr.w, wr.h);
+          const tableW = 120; const tableH = 40;
+          const tableX = WAR_ROOM_CENTER.x - tableW / 2;
+          const tableY = WAR_ROOM_CENTER.y - tableH / 2;
+          ctx.fillStyle = warRoomActive ? "#2a1510" : "#15152a";
+          ctx.fillRect(tableX, tableY, tableW, tableH);
+          ctx.strokeStyle = warRoomActive ? "rgba(255, 140, 50, 0.5)" : "rgba(100, 80, 200, 0.25)";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(tableX, tableY, tableW, tableH);
         }
 
         // War room border
