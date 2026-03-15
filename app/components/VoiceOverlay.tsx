@@ -112,10 +112,19 @@ function useScribeVoice(onChunk: (text: string, context: string[]) => void) {
   }, [listening, connecting, scribe]);
 
   const stop = useCallback(() => {
-    // Flush remaining partial text before disconnecting
-    const remaining = scribe.partialTranscript?.trim();
+    // Grab remaining partial text BEFORE disconnecting (disconnect may clear it)
+    let remaining: string | undefined;
+    try {
+      remaining = scribe.partialTranscript?.trim();
+    } catch {
+      // partialTranscript may throw if scribe is already disconnected
+    }
 
-    scribe.disconnect();
+    try {
+      scribe.disconnect();
+    } catch (err) {
+      console.warn("[Scribe] disconnect error (safe to ignore):", err);
+    }
 
     if (remaining && remaining.length >= MIN_CHUNK_LENGTH) {
       const sentences = remaining.match(SENTENCE_REGEX);
