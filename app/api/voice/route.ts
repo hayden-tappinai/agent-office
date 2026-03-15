@@ -1,16 +1,28 @@
 import { NextResponse } from "next/server";
 import { execFile } from "child_process";
-import { promisify } from "util";
-
-const execFileAsync = promisify(execFile);
 
 // openclaw CLI path
 const OPENCLAW_BIN = "/opt/homebrew/bin/openclaw";
 
 /**
- * Send a voice transcript to WIRE via the Gateway using `openclaw agent`.
- * This sends the message directly to the agent session (no Slack round-trip).
- * Uses --agent wire to route to WIRE's session.
+ * Send a voice transcript to WIRE via `openclaw agent --agent wire`.
+ *
+ * Why CLI instead of raw WebSocket:
+ * The gateway requires device identity (pub/priv key signing) for operator.write
+ * scopes needed by chat.send. The CLI handles this automatically via
+ * ~/.openclaw/identity/device.json. A raw WS connection without device identity
+ * gets scopes stripped to [] by clearUnboundScopes().
+ *
+ * Gateway connect frame format (for reference):
+ * {
+ *   type: "req", method: "connect", id: "0",
+ *   params: {
+ *     minProtocol: 3, maxProtocol: 3,
+ *     client: { id: "cli", displayName: "...", version: "1.0.0",
+ *               platform: "node", mode: "cli", instanceId: "..." },
+ *     auth: { token: "<gateway-token>" }
+ *   }
+ * }
  */
 export async function POST(req: Request) {
   try {
@@ -31,23 +43,17 @@ export async function POST(req: Request) {
 
     console.log("[Voice API] Sending via Gateway agent:", message.slice(0, 80));
 
-    // Use openclaw agent to send directly to WIRE's session via the Gateway.
-    // This bypasses Slack entirely — the message goes straight to the agent.
-    const args = [
-      "agent",
-      "--agent", "wire",
-      "-m", message,
-      "--json",
-    ];
+    // Fire-and-forget: spawn the CLI process and respond immediately.
+    // openclaw agent handles device identity signing for write scopes.
+    const child = execFile(
+      OPENCLAW_BIN,
+      ["agent", "--agent", "wire", "-m", message, "--json"],
+      {
+        timeout: 120000,
+        env: { ...process.env, PATH: `/opt/homebrew/bin:${process.env.PATH}` },
+      },
+    );
 
-    // Fire and forget — don't wait for the full agent response.
-    // We spawn detached so the API responds immediately.
-    const child = execFile(OPENCLAW_BIN, args, {
-      timeout: 120000,
-      env: { ...process.env, PATH: `/opt/homebrew/bin:${process.env.PATH}` },
-    });
-
-    // Don't await — let the agent process run in the background
     child.on("error", (err) => {
       console.warn("[Voice API] Background agent error:", err.message);
     });
