@@ -743,17 +743,8 @@ export default function AgentOffice() {
         const coffeeCount = stationAgent ? (coffeeCountsRef.current[stationAgent.id] || 0) : 0;
         const coffeeLabel = coffeeCount > 0 ? ` ☕×${coffeeCount}` : "";
         const labelText = s.label + coffeeLabel;
-        // Draw semi-transparent dark backing panel behind label
         ctx.font = "bold 14px monospace";
         ctx.textAlign = "center";
-        const labelW = ctx.measureText(labelText).width + 16;
-        const labelH = 22;
-        const labelX = s.x + s.w / 2 - labelW / 2;
-        const labelY = s.y - 24;
-        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-        ctx.beginPath();
-        ctx.roundRect(labelX, labelY, labelW, labelH, 4);
-        ctx.fill();
         // Check if station agent is active for orange treatment
         const stationIsActive = stationAgent ? activeIds.has(stationAgent.id) : false;
         ctx.fillStyle = stationIsActive ? "#ff8c32" : theme.stationLabel;
@@ -833,18 +824,9 @@ export default function AgentOffice() {
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Label with dark backing panel
         const wrLabelText = warRoomActive ? "🔥 WAR ROOM — ACTIVE" : "🔥 War Room";
         ctx.font = "bold 14px monospace";
         ctx.textAlign = "center";
-        const wrLabelW = ctx.measureText(wrLabelText).width + 16;
-        const wrLabelH = 22;
-        const wrLabelX = WAR_ROOM_CENTER.x - wrLabelW / 2;
-        const wrLabelY = wr.y - 24;
-        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-        ctx.beginPath();
-        ctx.roundRect(wrLabelX, wrLabelY, wrLabelW, wrLabelH, 4);
-        ctx.fill();
         ctx.fillStyle = warRoomActive ? "#ff8c32" : theme.stationLabel;
         ctx.fillText(wrLabelText, WAR_ROOM_CENTER.x, wr.y - 7);
       }
@@ -1139,20 +1121,10 @@ export default function AgentOffice() {
         // Name tag (offset to avoid overlap in clusters)
         const lOff = labelOffsets[agent.id] || 0;
         const nameColor = isActive ? "#ff8c32" : agent.id === "wire" ? theme.wireNameColor : theme.nameFallback;
-        // Agent name with dark backing panel
         ctx.font = "bold 12px monospace";
         ctx.textAlign = "center";
-        const nameText = agent.name;
-        const nameW = ctx.measureText(nameText).width + 10;
-        const nameH = 18;
-        const nameX = agent.x - nameW / 2;
-        const nameY = agent.y - SPRITE_SIZE / 2 - 18 + bob + lOff;
-        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-        ctx.beginPath();
-        ctx.roundRect(nameX, nameY, nameW, nameH, 3);
-        ctx.fill();
         ctx.fillStyle = nameColor;
-        ctx.fillText(nameText, agent.x, agent.y - SPRITE_SIZE / 2 - 4 + bob + lOff);
+        ctx.fillText(agent.name, agent.x, agent.y - SPRITE_SIZE / 2 - 4 + bob + lOff);
 
         // ─── Status indicators ──────────────────────────────
         if (isActive && agent.currentTask) {
