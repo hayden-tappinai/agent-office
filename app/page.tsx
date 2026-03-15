@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import VoiceOverlay from "./components/VoiceOverlay";
 
 // ─── Types ──────────────────────────────────────────────────────
 interface Vec2 {
@@ -328,6 +329,17 @@ export default function AgentOffice() {
   const stationImagesRef = useRef<Record<string, HTMLImageElement>>({});
   const warRoomImageRef = useRef<HTMLImageElement | null>(null);
   const coffeeCountsRef = useRef<Record<string, number>>({});
+
+  // Voice / WIRE thinking state
+  const [wireThinking, setWireThinking] = useState(false);
+  const wireThinkingRef = useRef(false);
+  const wireThinkingTranscriptRef = useRef("");
+
+  const handleWireThinking = useCallback((thinking: boolean, transcript?: string) => {
+    setWireThinking(thinking);
+    wireThinkingRef.current = thinking;
+    wireThinkingTranscriptRef.current = transcript || "";
+  }, []);
 
   // Dialogue state
   const [dialogue, setDialogue] = useState<DialogueState | null>(null);
@@ -665,11 +677,14 @@ export default function AgentOffice() {
           ctx.imageSmoothingEnabled = false; // Keep pixel art crisp
           ctx.drawImage(stationImg, drawX, drawY, drawW, drawH);
 
-          // Subtle glow for command center
+          // Subtle glow for command center (gold when WIRE is thinking)
           if (s.name === "command") {
-            const glowAlpha = 0.12 + 0.06 * Math.sin(t * 0.04);
-            ctx.shadowColor = "#00d4ff";
-            ctx.shadowBlur = 16;
+            const isThinking = wireThinkingRef.current;
+            const glowAlpha = isThinking
+              ? 0.20 + 0.12 * Math.sin(t * 0.08)
+              : 0.12 + 0.06 * Math.sin(t * 0.04);
+            ctx.shadowColor = isThinking ? "#FFD700" : "#00d4ff";
+            ctx.shadowBlur = isThinking ? 24 : 16;
             ctx.globalAlpha = glowAlpha;
             ctx.drawImage(stationImg, drawX, drawY, drawW, drawH);
             ctx.globalAlpha = 1;
@@ -1106,6 +1121,52 @@ export default function AgentOffice() {
         }
       }
 
+      // ─── WIRE Thought Bubble (voice processing) ─────────
+      if (wireThinkingRef.current && wireAgent) {
+        const bubbleW = 48;
+        const bubbleH = 28;
+        const bubbleX = wireAgent.x - 40;
+        const bubbleY = wireAgent.y - SPRITE_SIZE - 28 + Math.sin(t * 0.05 + wireAgent.bobOffset) * 2;
+
+        // Bubble body
+        ctx.fillStyle = "rgba(26, 26, 46, 0.9)";
+        ctx.beginPath();
+        ctx.roundRect(bubbleX, bubbleY, bubbleW, bubbleH, 6);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255, 215, 0, 0.7)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(bubbleX, bubbleY, bubbleW, bubbleH, 6);
+        ctx.stroke();
+
+        // Tail (three small circles pointing to WIRE)
+        const tailX = bubbleX + bubbleW * 0.7;
+        const tailY = bubbleY + bubbleH;
+        ctx.fillStyle = "rgba(26, 26, 46, 0.9)";
+        ctx.beginPath();
+        ctx.arc(tailX, tailY + 6, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255, 215, 0, 0.7)";
+        ctx.stroke();
+        ctx.fillStyle = "rgba(26, 26, 46, 0.9)";
+        ctx.beginPath();
+        ctx.arc(tailX + 5, tailY + 13, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255, 215, 0, 0.7)";
+        ctx.stroke();
+
+        // Animated dots (3 dots cycling)
+        for (let i = 0; i < 3; i++) {
+          const phase = (t * 0.08 + i * 0.7) % (Math.PI * 2);
+          const scale = 2.5 + 1.5 * Math.sin(phase);
+          const alpha = 0.5 + 0.5 * Math.sin(phase);
+          ctx.fillStyle = `rgba(255, 215, 0, ${alpha})`;
+          ctx.beginPath();
+          ctx.arc(bubbleX + 10 + i * 10, bubbleY + bubbleH / 2, scale, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
       // ─── HUD ──────────────────────────────────────────────
       // Title
       ctx.fillStyle = theme.hudTitle;
@@ -1116,9 +1177,15 @@ export default function AgentOffice() {
       ctx.font = "11px monospace";
       ctx.fillText("TappinAI HQ — 10 agents, always shipping", 20, 48);
 
-      // Active agent count badge
+      // Active agent count badge / WIRE processing indicator
       const ac = activityRef.current.activeAgents.length;
-      if (ac > 0) {
+      if (wireThinkingRef.current) {
+        const dots = ".".repeat(1 + (Math.floor(t / 30) % 3));
+        ctx.fillStyle = "#FFD700";
+        ctx.font = "bold 12px monospace";
+        ctx.textAlign = "left";
+        ctx.fillText(`⚡ WIRE processing${dots}`, 20, 68);
+      } else if (ac > 0) {
         ctx.fillStyle = "#ff6b2e";
         ctx.font = "bold 12px monospace";
         ctx.textAlign = "left";
@@ -1479,6 +1546,9 @@ export default function AgentOffice() {
           </div>
         </div>
       )}
+
+      {/* ─── Voice Overlay (Mic + Transcript) ─────────────── */}
+      <VoiceOverlay onWireThinking={handleWireThinking} />
 
       {tooltip && (
         <div

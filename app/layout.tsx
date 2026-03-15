@@ -37,6 +37,11 @@ export default function RootLayout({
             0% { background-position: 200% 0; }
             100% { background-position: -200% 0; }
           }
+          @keyframes micPulse {
+            0% { box-shadow: 0 0 0 0px rgba(255, 215, 0, 0.4); }
+            50% { box-shadow: 0 0 0 8px rgba(255, 215, 0, 0); }
+            100% { box-shadow: 0 0 0 0px rgba(255, 215, 0, 0.4); }
+          }
         `}</style>
       </head>
       <body style={{ margin: 0, padding: 0, overflow: "hidden", width: "100vw", height: "100vh" }}>{children}</body>
