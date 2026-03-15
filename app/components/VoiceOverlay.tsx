@@ -134,10 +134,23 @@ function useScribeVoice(onChunk: (text: string, context: string[]) => void) {
       // partialTranscript may throw if scribe is already disconnected
     }
 
-    try {
-      scribe.disconnect();
-    } catch (err) {
-      console.warn("[Scribe] disconnect error (safe to ignore):", err);
+    // Only disconnect if the WebSocket is actually connected — avoids
+    // "socket isn't connected" errors when the token expired or the
+    // connection was already torn down.
+    if (scribe.isConnected) {
+      try {
+        scribe.disconnect();
+      } catch (err) {
+        // Swallow residual WebSocket state errors (e.g. CLOSING → CLOSED race)
+        if (
+          err instanceof DOMException ||
+          (err instanceof Error && err.message.includes("socket"))
+        ) {
+          // Expected when the WS closes between our guard check and the call
+        } else {
+          console.warn("[Scribe] disconnect error:", err);
+        }
+      }
     }
 
     if (remaining && remaining.length >= MIN_CHUNK_LENGTH) {
