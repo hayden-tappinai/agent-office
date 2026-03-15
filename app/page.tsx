@@ -607,6 +607,23 @@ export default function AgentOffice() {
         warRoomAgentIds.unshift("wire"); // WIRE goes to war room when delegating
       }
 
+      // Pre-compute label Y offsets so clustered agents don't overlap
+      const CLUSTER_DIST = 80; // px — agents closer than this get offset
+      const LABEL_STEP = 16; // vertical px between stacked labels
+      const labelOffsets: Record<string, number> = {};
+      const sortedAgents = [...agentsRef.current].sort((a, b) => a.y - b.y);
+      for (let i = 0; i < sortedAgents.length; i++) {
+        let offset = 0;
+        for (let j = 0; j < i; j++) {
+          const d = dist({ x: sortedAgents[i].x, y: sortedAgents[i].y },
+                         { x: sortedAgents[j].x, y: sortedAgents[j].y });
+          if (d < CLUSTER_DIST) {
+            offset = Math.min(offset, (labelOffsets[sortedAgents[j].id] || 0) - LABEL_STEP);
+          }
+        }
+        labelOffsets[sortedAgents[i].id] = offset;
+      }
+
       for (const agent of agentsRef.current) {
         const isActive = activeIds.has(agent.id);
         const isWireInWarRoom = agent.id === "wire" && anyActive;
@@ -743,12 +760,13 @@ export default function AgentOffice() {
           ctx.restore();
         }
 
-        // Name tag
+        // Name tag (offset to avoid overlap in clusters)
+        const lOff = labelOffsets[agent.id] || 0;
         const nameColor = isActive ? "#ff8c32" : agent.id === "wire" ? theme.wireNameColor : theme.nameFallback;
         ctx.fillStyle = nameColor;
         ctx.font = "bold 10px monospace";
         ctx.textAlign = "center";
-        ctx.fillText(agent.name, agent.x, agent.y - SPRITE_SIZE / 2 - 4 + bob);
+        ctx.fillText(agent.name, agent.x, agent.y - SPRITE_SIZE / 2 - 4 + bob + lOff);
 
         // ─── Status indicators ──────────────────────────────
         if (isActive && agent.currentTask) {
@@ -757,7 +775,7 @@ export default function AgentOffice() {
           const bubbleW = ctx.measureText(bubbleText).width + 16;
           const bubbleH = 18;
           const bubbleX = agent.x - bubbleW / 2;
-          const bubbleY = agent.y - SPRITE_SIZE / 2 - 28 + bob;
+          const bubbleY = agent.y - SPRITE_SIZE / 2 - 28 + bob + lOff;
 
           // Bubble bg
           ctx.fillStyle = "rgba(40, 20, 10, 0.9)";
@@ -793,7 +811,7 @@ export default function AgentOffice() {
             ctx.fillStyle = "#22c55e";
             ctx.font = "bold 18px sans-serif";
             ctx.textAlign = "center";
-            ctx.fillText("✅", agent.x, agent.y - SPRITE_SIZE / 2 - 8 + bob);
+            ctx.fillText("✅", agent.x, agent.y - SPRITE_SIZE / 2 - 8 + bob + lOff);
             ctx.globalAlpha = 1;
           }
         } else if (agent.state === "idle") {
@@ -803,7 +821,7 @@ export default function AgentOffice() {
             const dotAlpha = 0.3 + 0.3 * Math.sin(t * 0.08 + i * 1.2 + agent.bobOffset);
             ctx.fillStyle = theme.idleDot.replace("0.5)", `${dotAlpha})`);
             ctx.beginPath();
-            ctx.arc(agent.x - 8 + i * 8, agent.y - SPRITE_SIZE / 2 - 14 + bob, 1.5, 0, Math.PI * 2);
+            ctx.arc(agent.x - 8 + i * 8, agent.y - SPRITE_SIZE / 2 - 14 + bob + lOff, 1.5, 0, Math.PI * 2);
             ctx.fill();
           }
         }
