@@ -241,7 +241,7 @@ function MicButton({
       disabled={connecting}
       style={{
         position: "fixed",
-        top: 12,
+        top: 60,
         left: "50%",
         transform: "translateX(-50%)",
         width: 80,
