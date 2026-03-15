@@ -247,16 +247,13 @@ function MicButton({
         width: 80,
         height: 80,
         zIndex: 1100,
-        border: `2px solid ${connecting ? "#FF8C42" : listening ? "#2563EB" : "#3a5a7a"}`,
-        borderRadius: 10,
+        border: "none",
+        borderRadius: 0,
         background: "transparent",
         cursor: connecting ? "wait" : "pointer",
         padding: 0,
         outline: "none",
-        boxShadow:
-          listening && !prefersReduced
-            ? `0 0 0 ${4 + 4 * Math.abs(Math.sin(Date.now() * 0.003))}px rgba(37, 99, 235, 0.3)`
-            : "0 2px 8px rgba(0,0,0,0.3)",
+        boxShadow: "none",
         transition: "border-color 200ms, transform 100ms",
         animation:
           listening && !prefersReduced
