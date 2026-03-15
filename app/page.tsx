@@ -1461,13 +1461,8 @@ export default function AgentOffice() {
             left: 0,
             width: "100vw",
             height: "100vh",
-            background: "rgba(0, 0, 0, 0.75)",
-            backdropFilter: "blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
+            background: "#000",
             zIndex: 2000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
             animation: "backdropFadeIn 200ms ease-out",
           }}
         >
@@ -1475,16 +1470,13 @@ export default function AgentOffice() {
             onClick={(e) => e.stopPropagation()}
             style={{
               position: "relative",
-              width: "95vw",
-              height: "92vh",
-              borderRadius: 8,
-              border: `2px solid ${AGENT_COLORS[interior.agentId] || "#fff"}`,
+              width: "100vw",
+              height: "100vh",
               overflow: "hidden",
-              animation: "interiorPop 300ms cubic-bezier(0.34, 1.56, 0.64, 1)",
-              background: "#1a1a2e",
+              background: "#000",
             }}
           >
-            {/* Interior image */}
+            {/* Interior image — fullscreen immersive */}
             {interior.loaded ? (
               <img
                 src={`/interiors/interior-${interior.agentId}.png`}
@@ -1516,21 +1508,21 @@ export default function AgentOffice() {
               </div>
             )}
 
-            {/* Close button */}
+            {/* Close button — overlaid top-right */}
             <button
               onClick={(e) => { e.stopPropagation(); closeInterior(); }}
               style={{
                 position: "absolute",
-                top: -12,
-                right: -12,
-                width: 32,
-                height: 32,
-                background: "#1a1a2e",
+                top: 16,
+                right: 16,
+                width: 40,
+                height: 40,
+                background: "rgba(0, 0, 0, 0.6)",
                 border: `2px solid ${AGENT_COLORS[interior.agentId] || "#fff"}`,
                 borderRadius: 4,
                 color: AGENT_COLORS[interior.agentId] || "#fff",
                 fontFamily: "'Press Start 2P', monospace",
-                fontSize: 14,
+                fontSize: 16,
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -1540,39 +1532,40 @@ export default function AgentOffice() {
               }}
               onMouseEnter={(e) => {
                 (e.target as HTMLElement).style.background = AGENT_COLORS[interior.agentId] || "#fff";
-                (e.target as HTMLElement).style.color = "#1a1a2e";
+                (e.target as HTMLElement).style.color = "#000";
               }}
               onMouseLeave={(e) => {
-                (e.target as HTMLElement).style.background = "#1a1a2e";
+                (e.target as HTMLElement).style.background = "rgba(0, 0, 0, 0.6)";
                 (e.target as HTMLElement).style.color = AGENT_COLORS[interior.agentId] || "#fff";
               }}
             >×</button>
 
-            {/* Info bar */}
+            {/* Info bar — overlaid at bottom */}
             <div style={{
               position: "absolute",
               bottom: 0,
               left: 0,
               right: 0,
-              height: 48,
-              background: "rgba(26, 26, 46, 0.85)",
-              borderTop: "1px solid rgba(240, 230, 211, 0.2)",
+              height: 56,
+              background: "linear-gradient(transparent, rgba(0, 0, 0, 0.8))",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              padding: "0 20px",
+              padding: "0 24px",
               zIndex: 2,
               fontFamily: "'Press Start 2P', monospace",
             }}>
               <span style={{
-                fontSize: 12,
+                fontSize: 14,
                 color: AGENT_COLORS[interior.agentId] || "#fff",
+                textShadow: "0 2px 8px rgba(0,0,0,0.8)",
               }}>
                 {AGENT_EMOJIS[interior.agentId]} {interior.agentId.toUpperCase()}
               </span>
               <span style={{
-                fontSize: 10,
+                fontSize: 11,
                 color: "#f0e6d3",
+                textShadow: "0 2px 8px rgba(0,0,0,0.8)",
               }}>
                 {AGENT_ROLES[interior.agentId] || "Agent"}
               </span>
