@@ -60,6 +60,118 @@ interface Agent {
   completedAt: number; // timestamp for fade-out
 }
 
+// ─── Theme ──────────────────────────────────────────────────────
+interface Theme {
+  canvasBg: string;
+  gridLine: string;
+  stationFallback: string;
+  stationStroke: string;
+  commandGlow: string;
+  stationLabel: string;
+  hudTitle: string;
+  hudSub: string;
+  hudIdle: string;
+  hudIdleText: string;
+  clockColor: string;
+  liveTextColor: string;
+  idleDot: string;
+  idleLineColor: string;
+  shadowIdle: string;
+  shadowActive: string;
+  spotIdle: string;
+  spotActive: string;
+  nameFallback: string;
+  wireNameColor: string;
+  warRoomLabel: string;
+  warRoomBorderIdle: string;
+  warRoomFallbackBg: string;
+  warRoomTableBg: string;
+  warRoomTableStroke: string;
+  tooltipBg: string;
+  tooltipBorder: string;
+  tooltipText: string;
+  tooltipRole: string;
+  tooltipStatus: string;
+  tooltipMeta: string;
+  tooltipShadow: string;
+  outerBg: string;
+  agentCircleBg: string;
+}
+
+const LIGHT_THEME: Theme = {
+  canvasBg: "#E8E8E8",
+  gridLine: "rgba(0, 0, 0, 0.08)",
+  stationFallback: "#D8D8D8",
+  stationStroke: "#CCCCCC",
+  commandGlow: "#00a0cc",
+  stationLabel: "#333333",
+  hudTitle: "#007799",
+  hudSub: "#555555",
+  hudIdle: "#558855",
+  hudIdleText: "#558855",
+  clockColor: "#555555",
+  liveTextColor: "#338844",
+  idleDot: "rgba(0, 120, 180, 0.5)",
+  idleLineColor: "rgba(0, 0, 0, 0.06)",
+  shadowIdle: "rgba(0, 0, 0, 0.10)",
+  shadowActive: "rgba(200, 80, 20, 0.15)",
+  spotIdle: "rgba(80, 160, 220, 0.10)",
+  spotActive: "rgba(255, 140, 50, 0.18)",
+  nameFallback: "#333333",
+  wireNameColor: "#007799",
+  warRoomLabel: "#555555",
+  warRoomBorderIdle: "rgba(0, 0, 0, 0.15)",
+  warRoomFallbackBg: "rgba(0, 0, 0, 0.04)",
+  warRoomTableBg: "#D0D0D0",
+  warRoomTableStroke: "rgba(0, 0, 0, 0.2)",
+  tooltipBg: "#ffffff",
+  tooltipBorder: "#CCCCCC",
+  tooltipText: "#222222",
+  tooltipRole: "#555555",
+  tooltipStatus: "#333333",
+  tooltipMeta: "#777777",
+  tooltipShadow: "0 4px 20px rgba(0,0,0,0.12)",
+  outerBg: "#E0E0E0",
+  agentCircleBg: "rgba(255, 255, 255, 1.0)",
+};
+
+const DARK_THEME: Theme = {
+  canvasBg: "#0a0a1a",
+  gridLine: "#151530",
+  stationFallback: "#1a1a2e",
+  stationStroke: "#1e3a5f",
+  commandGlow: "#00d4ff",
+  stationLabel: "#4a6a8a",
+  hudTitle: "#00d4ff",
+  hudSub: "#3a5a7a",
+  hudIdle: "#2a4a3a",
+  hudIdleText: "#2a4a3a",
+  clockColor: "#3a5a7a",
+  liveTextColor: "#3a7a5a",
+  idleDot: "rgba(0, 212, 255, 0.5)",
+  idleLineColor: "rgba(0, 212, 255, 0.04)",
+  shadowIdle: "rgba(0, 100, 200, 0.1)",
+  shadowActive: "rgba(255, 100, 30, 0.15)",
+  spotIdle: "rgba(80, 180, 255, 0.25)",
+  spotActive: "rgba(255, 140, 50, 0.35)",
+  nameFallback: "#6888a8",
+  wireNameColor: "#00d4ff",
+  warRoomLabel: "#4a3a6a",
+  warRoomBorderIdle: "rgba(80, 60, 160, 0.2)",
+  warRoomFallbackBg: "rgba(100, 60, 200, 0.06)",
+  warRoomTableBg: "#15152a",
+  warRoomTableStroke: "rgba(100, 80, 200, 0.25)",
+  tooltipBg: "#0d1b2a",
+  tooltipBorder: "#00d4ff",
+  tooltipText: "#c0d8f0",
+  tooltipRole: "#6888a8",
+  tooltipStatus: "#88aacc",
+  tooltipMeta: "#4a6a8a",
+  tooltipShadow: "0 0 20px rgba(0,212,255,0.2)",
+  outerBg: "#050510",
+  agentCircleBg: "rgba(255, 255, 255, 1.0)",
+};
+
 // ─── Constants ──────────────────────────────────────────────────
 const CANVAS_W = 1920;
 const CANVAS_H = 1080;
@@ -149,9 +261,16 @@ export default function AgentOffice() {
     y: number;
   } | null>(null);
   const [, setActiveCount] = useState(0);
+  const [isDark, setIsDark] = useState(false); // Light mode default
+  const themeRef = useRef<Theme>(LIGHT_THEME);
   const timeRef = useRef(0);
   const stationImagesRef = useRef<Record<string, HTMLImageElement>>({});
   const warRoomImageRef = useRef<HTMLImageElement | null>(null);
+
+  // Keep themeRef in sync
+  useEffect(() => {
+    themeRef.current = isDark ? DARK_THEME : LIGHT_THEME;
+  }, [isDark]);
 
   // Load sprites + init agents
   useEffect(() => {
@@ -296,12 +415,14 @@ export default function AgentOffice() {
       const activeIds = new Set(activeAgents.map((a) => a.id));
       const anyActive = activeIds.size > 0;
 
+      const theme = themeRef.current;
+
       // Clear
-      ctx.fillStyle = "#0a0a1a";
+      ctx.fillStyle = theme.canvasBg;
       ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
       // Draw floor grid
-      ctx.strokeStyle = "#151530";
+      ctx.strokeStyle = theme.gridLine;
       ctx.lineWidth = 1;
       for (let x = 0; x < CANVAS_W; x += TILE) {
         ctx.beginPath();
@@ -350,15 +471,15 @@ export default function AgentOffice() {
           ctx.restore();
         } else {
           // Fallback to procedural drawing while images load
-          ctx.fillStyle = s.color;
+          ctx.fillStyle = theme.stationFallback;
           ctx.fillRect(s.x, s.y, s.w, s.h);
-          const glow = s.name === "command" ? "#00d4ff" : "#1e3a5f";
+          const glow = s.name === "command" ? theme.commandGlow : theme.stationStroke;
           ctx.strokeStyle = glow;
           ctx.lineWidth = s.name === "command" ? 2 : 1;
           ctx.strokeRect(s.x, s.y, s.w, s.h);
         }
 
-        ctx.fillStyle = "#4a6a8a";
+        ctx.fillStyle = theme.stationLabel;
         ctx.font = "11px monospace";
         ctx.textAlign = "center";
         ctx.fillText(s.label, s.x + s.w / 2, s.y - 6);
@@ -410,14 +531,14 @@ export default function AgentOffice() {
           const pulseAlpha = 0.06 + 0.04 * Math.sin(t * 0.03);
           ctx.fillStyle = warRoomActive
             ? `rgba(255, 100, 50, ${pulseAlpha + 0.04})`
-            : `rgba(100, 60, 200, ${pulseAlpha})`;
+            : theme.warRoomFallbackBg;
           ctx.fillRect(wr.x, wr.y, wr.w, wr.h);
           const tableW = 120; const tableH = 40;
           const tableX = WAR_ROOM_CENTER.x - tableW / 2;
           const tableY = WAR_ROOM_CENTER.y - tableH / 2;
-          ctx.fillStyle = warRoomActive ? "#2a1510" : "#15152a";
+          ctx.fillStyle = warRoomActive ? "#2a1510" : theme.warRoomTableBg;
           ctx.fillRect(tableX, tableY, tableW, tableH);
-          ctx.strokeStyle = warRoomActive ? "rgba(255, 140, 50, 0.5)" : "rgba(100, 80, 200, 0.25)";
+          ctx.strokeStyle = warRoomActive ? "rgba(255, 140, 50, 0.5)" : theme.warRoomTableStroke;
           ctx.lineWidth = 2;
           ctx.strokeRect(tableX, tableY, tableW, tableH);
         }
@@ -425,14 +546,14 @@ export default function AgentOffice() {
         // War room border
         ctx.strokeStyle = warRoomActive
           ? `rgba(255, 120, 40, ${0.4 + 0.2 * Math.sin(t * 0.03)})`
-          : "rgba(80, 60, 160, 0.2)";
+          : theme.warRoomBorderIdle;
         ctx.lineWidth = 1;
         ctx.setLineDash([6, 4]);
         ctx.strokeRect(wr.x, wr.y, wr.w, wr.h);
         ctx.setLineDash([]);
 
         // Label
-        ctx.fillStyle = warRoomActive ? "#ff8c32" : "#4a3a6a";
+        ctx.fillStyle = warRoomActive ? "#ff8c32" : theme.warRoomLabel;
         ctx.font = "bold 11px monospace";
         ctx.textAlign = "center";
         ctx.fillText(
@@ -467,7 +588,7 @@ export default function AgentOffice() {
             const cmdCenter = stationCenter(cmdStation);
             const aCenter = stationCenter(agentStation);
             const alpha = 0.04 + 0.02 * Math.sin(t * 0.02 + AGENTS_DATA.findIndex((a) => a.id === agent.id));
-            ctx.strokeStyle = `rgba(0, 212, 255, ${alpha})`;
+            ctx.strokeStyle = theme.idleLineColor;
             ctx.lineWidth = 1;
             ctx.setLineDash([4, 8]);
             ctx.beginPath();
@@ -573,16 +694,14 @@ export default function AgentOffice() {
         const bob = Math.sin(t * 0.05 + agent.bobOffset) * 2;
 
         // Shadow
-        ctx.fillStyle = isActive
-          ? "rgba(255, 100, 30, 0.15)"
-          : "rgba(0, 100, 200, 0.1)";
+        ctx.fillStyle = isActive ? theme.shadowActive : theme.shadowIdle;
         ctx.beginPath();
         ctx.ellipse(agent.x, agent.y + SPRITE_SIZE / 2 + 4, 24, 10, 0, 0, Math.PI * 2);
         ctx.fill();
 
         // Glowing floor spotlight under agent
         ctx.save();
-        const spotColor = isActive ? "rgba(255, 140, 50, 0.35)" : "rgba(80, 180, 255, 0.25)";
+        const spotColor = isActive ? theme.spotActive : theme.spotIdle;
         const spotGrad = ctx.createRadialGradient(agent.x, agent.y + SPRITE_SIZE / 2, 0, agent.x, agent.y + SPRITE_SIZE / 2, 44);
         spotGrad.addColorStop(0, spotColor);
         spotGrad.addColorStop(1, "transparent");
@@ -597,11 +716,12 @@ export default function AgentOffice() {
           const sx = agent.x - SPRITE_SIZE / 2;
           const sy = agent.y + bob - SPRITE_SIZE / 2;
 
-          // Solid white opaque circle BEHIND the agent (1.2x sprite radius)
+          // BEFORE drawing the sprite, draw a solid white disc
           ctx.save();
-          ctx.fillStyle = "rgba(255, 255, 255, 1.0)";
+          ctx.fillStyle = '#FFFFFF';
+          ctx.globalAlpha = 1.0;
           ctx.beginPath();
-          ctx.arc(agent.x, agent.y + bob, SPRITE_SIZE * 0.6, 0, Math.PI * 2);
+          ctx.arc(agent.x, agent.y + bob, SPRITE_SIZE * 0.65, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
 
@@ -624,7 +744,7 @@ export default function AgentOffice() {
         }
 
         // Name tag
-        const nameColor = isActive ? "#ff8c32" : agent.id === "wire" ? "#00d4ff" : "#6888a8";
+        const nameColor = isActive ? "#ff8c32" : agent.id === "wire" ? theme.wireNameColor : theme.nameFallback;
         ctx.fillStyle = nameColor;
         ctx.font = "bold 10px monospace";
         ctx.textAlign = "center";
@@ -681,7 +801,7 @@ export default function AgentOffice() {
           const dotCount = 3;
           for (let i = 0; i < dotCount; i++) {
             const dotAlpha = 0.3 + 0.3 * Math.sin(t * 0.08 + i * 1.2 + agent.bobOffset);
-            ctx.fillStyle = `rgba(0, 212, 255, ${dotAlpha})`;
+            ctx.fillStyle = theme.idleDot.replace("0.5)", `${dotAlpha})`);
             ctx.beginPath();
             ctx.arc(agent.x - 8 + i * 8, agent.y - SPRITE_SIZE / 2 - 14 + bob, 1.5, 0, Math.PI * 2);
             ctx.fill();
@@ -691,11 +811,11 @@ export default function AgentOffice() {
 
       // ─── HUD ──────────────────────────────────────────────
       // Title
-      ctx.fillStyle = "#00d4ff";
+      ctx.fillStyle = theme.hudTitle;
       ctx.font = "bold 16px monospace";
       ctx.textAlign = "left";
       ctx.fillText("⚡ WHYRE Agent Office", 20, 30);
-      ctx.fillStyle = "#3a5a7a";
+      ctx.fillStyle = theme.hudSub;
       ctx.font = "11px monospace";
       ctx.fillText("TappinAI HQ — 10 agents, always shipping", 20, 48);
 
@@ -707,7 +827,7 @@ export default function AgentOffice() {
         ctx.textAlign = "left";
         ctx.fillText(`🔥 ${ac} agent${ac > 1 ? "s" : ""} active`, 20, 68);
       } else {
-        ctx.fillStyle = "#2a4a3a";
+        ctx.fillStyle = theme.hudIdle;
         ctx.font = "12px monospace";
         ctx.textAlign = "left";
         ctx.fillText("💤 All agents idle", 20, 68);
@@ -716,7 +836,7 @@ export default function AgentOffice() {
       // Clock
       const now = new Date();
       const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
-      ctx.fillStyle = "#3a5a7a";
+      ctx.fillStyle = theme.clockColor;
       ctx.font = "11px monospace";
       ctx.textAlign = "right";
       ctx.fillText(timeStr, CANVAS_W - 20, 30);
@@ -727,7 +847,7 @@ export default function AgentOffice() {
       ctx.beginPath();
       ctx.arc(CANVAS_W - 58, 44, 4, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#3a7a5a";
+      ctx.fillStyle = theme.liveTextColor;
       ctx.font = "10px monospace";
       ctx.textAlign = "right";
       ctx.fillText("LIVE", CANVAS_W - 20, 48);
@@ -772,7 +892,7 @@ export default function AgentOffice() {
   return (
     <div
       style={{
-        background: "#050510",
+        background: isDark ? DARK_THEME.outerBg : LIGHT_THEME.outerBg,
         width: "100vw",
         height: "100vh",
         overflow: "hidden",
@@ -800,29 +920,50 @@ export default function AgentOffice() {
           imageRendering: "pixelated",
         }}
       />
+      {/* Theme toggle button */}
+      <button
+        onClick={() => setIsDark((d) => !d)}
+        style={{
+          position: "fixed",
+          top: 12,
+          right: 12,
+          zIndex: 200,
+          background: isDark ? "#1a1a2e" : "#ffffff",
+          border: `1px solid ${isDark ? "#3a5a7a" : "#c8c0b8"}`,
+          borderRadius: 8,
+          padding: "6px 12px",
+          color: isDark ? "#aac" : "#5a6a7a",
+          fontFamily: "monospace",
+          fontSize: 12,
+          cursor: "pointer",
+          boxShadow: isDark ? "0 2px 8px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.1)",
+        }}
+      >
+        {isDark ? "☀️ Light" : "🌙 Dark"}
+      </button>
       {tooltip && (
         <div
           style={{
             position: "fixed",
             left: tooltip.x + 16,
             top: tooltip.y - 20,
-            background: "#0d1b2a",
-            border: `1px solid ${tooltip.agent.activity === "active" ? "#ff8c32" : "#00d4ff"}`,
+            background: isDark ? DARK_THEME.tooltipBg : LIGHT_THEME.tooltipBg,
+            border: `1px solid ${tooltip.agent.activity === "active" ? "#ff8c32" : (isDark ? DARK_THEME.tooltipBorder : LIGHT_THEME.tooltipBorder)}`,
             borderRadius: 6,
             padding: "10px 14px",
-            color: "#c0d8f0",
+            color: isDark ? DARK_THEME.tooltipText : LIGHT_THEME.tooltipText,
             fontSize: 12,
             zIndex: 100,
             pointerEvents: "none",
             boxShadow: tooltip.agent.activity === "active"
               ? "0 0 20px rgba(255,140,50,0.3)"
-              : "0 0 20px rgba(0,212,255,0.2)",
+              : (isDark ? DARK_THEME.tooltipShadow : LIGHT_THEME.tooltipShadow),
             minWidth: 180,
           }}
         >
           <div
             style={{
-              color: tooltip.agent.activity === "active" ? "#ff8c32" : "#00d4ff",
+              color: tooltip.agent.activity === "active" ? "#ff8c32" : (isDark ? "#00d4ff" : "#0088aa"),
               fontWeight: "bold",
               fontSize: 14,
               marginBottom: 4,
@@ -836,15 +977,15 @@ export default function AgentOffice() {
               <span style={{ marginLeft: 8, fontSize: 10, color: "#22c55e" }}>✅ DONE</span>
             )}
           </div>
-          <div style={{ color: "#6888a8", marginBottom: 2 }}>{tooltip.agent.role}</div>
+          <div style={{ color: isDark ? DARK_THEME.tooltipRole : LIGHT_THEME.tooltipRole, marginBottom: 2 }}>{tooltip.agent.role}</div>
           {tooltip.agent.activity === "active" && tooltip.agent.currentTask ? (
             <div style={{ color: "#ffb870", marginBottom: 2 }}>
               🔥 {tooltip.agent.currentTask}
             </div>
           ) : (
-            <div style={{ color: "#88aacc" }}>📍 {tooltip.agent.statusMsg}</div>
+            <div style={{ color: isDark ? DARK_THEME.tooltipStatus : LIGHT_THEME.tooltipStatus }}>📍 {tooltip.agent.statusMsg}</div>
           )}
-          <div style={{ color: "#4a6a8a", marginTop: 4, fontSize: 10 }}>
+          <div style={{ color: isDark ? DARK_THEME.tooltipMeta : LIGHT_THEME.tooltipMeta, marginTop: 4, fontSize: 10 }}>
             {tooltip.agent.activity === "active"
               ? "🏃 In the war room"
               : tooltip.agent.state === "walking"
