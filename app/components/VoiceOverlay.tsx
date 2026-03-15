@@ -184,7 +184,7 @@ function useScribeVoice(onChunk: (text: string, context: string[]) => void) {
   return { listening, connecting, interim, hearingSpeech, toggle };
 }
 
-// ─── MicButton ──────────────────────────────────────────────────
+// ─── MicButton (pixel art image-based) ──────────────────────────
 function MicButton({
   listening,
   connecting,
@@ -196,83 +196,28 @@ function MicButton({
   hearingSpeech: boolean;
   onClick: () => void;
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const tRef = useRef(0);
+  // Pre-load mic images
+  const micOffRef = useRef<HTMLImageElement | null>(null);
+  const micOnRef = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
-    let raf: number;
-
-    const draw = () => {
-      tRef.current++;
-      const t = tRef.current;
-      ctx.clearRect(0, 0, 56, 56);
-      ctx.imageSmoothingEnabled = false;
-
-      const micColor = connecting ? "#FF8C42" : listening ? "#2563EB" : "#999999";
-
-      const px = 2;
-      const ox = 12;
-      const oy = 6;
-
-      // Mic head
-      ctx.fillStyle = micColor;
-      ctx.fillRect(ox + 4 * px, oy + 0 * px, 4 * px, 1 * px);
-      ctx.fillRect(ox + 3 * px, oy + 1 * px, 6 * px, 1 * px);
-      ctx.fillRect(ox + 3 * px, oy + 2 * px, 6 * px, 1 * px);
-      ctx.fillRect(ox + 3 * px, oy + 3 * px, 6 * px, 1 * px);
-      ctx.fillRect(ox + 3 * px, oy + 4 * px, 6 * px, 1 * px);
-      ctx.fillRect(ox + 3 * px, oy + 5 * px, 6 * px, 1 * px);
-      ctx.fillRect(ox + 3 * px, oy + 6 * px, 6 * px, 1 * px);
-      ctx.fillRect(ox + 4 * px, oy + 7 * px, 4 * px, 1 * px);
-      // Detail lines
-      ctx.fillStyle = connecting ? "#b86a20" : listening ? "#1E3A5F" : "#777777";
-      ctx.fillRect(ox + 4 * px, oy + 3 * px, 4 * px, 1 * px);
-      ctx.fillRect(ox + 4 * px, oy + 5 * px, 4 * px, 1 * px);
-      // Stand
-      ctx.fillStyle = micColor;
-      ctx.fillRect(ox + 2 * px, oy + 7 * px, 1 * px, 1 * px);
-      ctx.fillRect(ox + 9 * px, oy + 7 * px, 1 * px, 1 * px);
-      ctx.fillRect(ox + 2 * px, oy + 8 * px, 1 * px, 1 * px);
-      ctx.fillRect(ox + 9 * px, oy + 8 * px, 1 * px, 1 * px);
-      ctx.fillRect(ox + 3 * px, oy + 9 * px, 6 * px, 1 * px);
-      ctx.fillRect(ox + 5 * px, oy + 10 * px, 2 * px, 1 * px);
-      ctx.fillRect(ox + 5 * px, oy + 11 * px, 2 * px, 1 * px);
-      ctx.fillRect(ox + 3 * px, oy + 12 * px, 6 * px, 1 * px);
-
-      // VU bars when hearing speech
-      if (listening && hearingSpeech) {
-        for (let i = 0; i < 3; i++) {
-          const barH = Math.sin(t * 0.12 + i * 1.2) * 6 + 7;
-          const barX = 40 + i * 4;
-          const barY = 28 - barH / 2;
-          ctx.fillStyle = "rgba(37, 99, 235, 0.8)";
-          ctx.fillRect(barX, barY, 2, barH);
-        }
-      }
-
-      // Connecting spinner
-      if (connecting) {
-        const angle = t * 0.15;
-        ctx.strokeStyle = "#FF8C42";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(28, 28, 24, angle, angle + Math.PI * 1.2);
-        ctx.stroke();
-      }
-
-      raf = requestAnimationFrame(draw);
-    };
-
-    raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
-  }, [listening, connecting, hearingSpeech]);
+    const off = new Image();
+    off.src = "/mic-off.png";
+    micOffRef.current = off;
+    const on = new Image();
+    on.src = "/mic-on.png";
+    micOnRef.current = on;
+  }, []);
 
   const prefersReduced =
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Command Center station: x:720 y:360 w:480 h:260
+  // Top center = x:720 + 480/2 = 960, y:360
+  // Convert canvas coords to viewport percentages: 960/1920 = 50%, 360/1080 ≈ 33%
+  // Position ABOVE the station, so a bit higher
+  const micSrc = listening || connecting ? "/mic-on.png" : "/mic-off.png";
 
   return (
     <button
@@ -283,14 +228,15 @@ function MicButton({
       disabled={connecting}
       style={{
         position: "fixed",
-        top: "42%",
-        left: "64%",
-        width: 56,
-        height: 56,
+        top: "30%",
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: 64,
+        height: 64,
         zIndex: 1100,
         border: `2px solid ${connecting ? "#FF8C42" : listening ? "#2563EB" : "#3a5a7a"}`,
         borderRadius: 8,
-        background: "#1a1a2e",
+        background: "transparent",
         cursor: connecting ? "wait" : "pointer",
         padding: 0,
         outline: "none",
@@ -304,22 +250,28 @@ function MicButton({
             ? "micPulse 1.5s infinite ease-in-out"
             : undefined,
         opacity: connecting ? 0.8 : 1,
+        overflow: "hidden",
       }}
       onMouseDown={(e) => {
-        (e.currentTarget as HTMLElement).style.transform = "scale(0.92)";
+        (e.currentTarget as HTMLElement).style.transform = "translateX(-50%) scale(0.92)";
       }}
       onMouseUp={(e) => {
-        (e.currentTarget as HTMLElement).style.transform = "scale(1)";
+        (e.currentTarget as HTMLElement).style.transform = "translateX(-50%) scale(1)";
       }}
       onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.transform = "scale(1)";
+        (e.currentTarget as HTMLElement).style.transform = "translateX(-50%) scale(1)";
       }}
     >
-      <canvas
-        ref={canvasRef}
-        width={56}
-        height={56}
-        style={{ imageRendering: "pixelated", width: 56, height: 56 }}
+      <img
+        src={micSrc}
+        alt={listening ? "Microphone on" : "Microphone off"}
+        width={60}
+        height={60}
+        style={{
+          imageRendering: "pixelated",
+          display: "block",
+          margin: "auto",
+        }}
       />
     </button>
   );
@@ -482,8 +434,9 @@ export default function VoiceOverlay({
         <div
           style={{
             position: "fixed",
-            top: "48%",
-            left: "64%",
+            top: "35%",
+            left: "50%",
+            transform: "translateX(-50%)",
             zIndex: 1100,
             background: "rgba(26, 26, 46, 0.9)",
             border: "1px solid rgba(37, 99, 235, 0.4)",

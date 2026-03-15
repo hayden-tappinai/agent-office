@@ -329,6 +329,9 @@ export default function AgentOffice() {
   const stationImagesRef = useRef<Record<string, HTMLImageElement>>({});
   const warRoomImageRef = useRef<HTMLImageElement | null>(null);
   const coffeeCountsRef = useRef<Record<string, number>>({});
+  const wavingSpritesRef = useRef<Record<string, HTMLImageElement>>({});
+  const hoveredAgentRef = useRef<string | null>(null);
+  const mouseCanvasRef = useRef<Vec2 | null>(null);
 
   // Voice / WIRE thinking state
   const [wireThinking, setWireThinking] = useState(false);
@@ -529,6 +532,13 @@ export default function AgentOffice() {
     });
 
     agentsRef.current = agents;
+
+    // Pre-load waving sprites (background, no blocking)
+    for (const a of AGENTS_DATA) {
+      const waveImg = new Image();
+      waveImg.src = `/sprites/${a.id}-wave.png`;
+      wavingSpritesRef.current[a.id] = waveImg;
+    }
 
     // Load station images
     const stationImageMap: Record<string, string> = {
@@ -1001,6 +1011,13 @@ export default function AgentOffice() {
           const sx = agent.x - SPRITE_SIZE / 2;
           const sy = agent.y + bob - SPRITE_SIZE / 2;
 
+          // Determine which sprite to use (waving if hovered)
+          const isHovered = hoveredAgentRef.current === agent.id;
+          const waveSprite = wavingSpritesRef.current[agent.id];
+          const drawSprite = (isHovered && waveSprite && waveSprite.complete && waveSprite.naturalWidth > 0)
+            ? waveSprite
+            : agent.sprite;
+
           // BEFORE drawing the sprite, draw a solid white disc
           ctx.save();
           ctx.fillStyle = '#FFFFFF';
@@ -1015,10 +1032,10 @@ export default function AgentOffice() {
           if (agent.direction === "left") {
             ctx.translate(agent.x, agent.y + bob - SPRITE_SIZE / 2);
             ctx.scale(-1, 1);
-            ctx.drawImage(agent.sprite, -SPRITE_SIZE / 2, 0, SPRITE_SIZE, SPRITE_SIZE);
+            ctx.drawImage(drawSprite, -SPRITE_SIZE / 2, 0, SPRITE_SIZE, SPRITE_SIZE);
           } else {
             ctx.drawImage(
-              agent.sprite,
+              drawSprite,
               sx,
               sy,
               SPRITE_SIZE,
@@ -1223,6 +1240,34 @@ export default function AgentOffice() {
     return () => cancelAnimationFrame(animId);
   }, []);
 
+  // Mouse move handler — track hover over agents for wave animation
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = CANVAS_W / rect.width;
+    const scaleY = CANVAS_H / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleY;
+    mouseCanvasRef.current = { x: mx, y: my };
+
+    // Check distance to each agent
+    let found: string | null = null;
+    for (const agent of agentsRef.current) {
+      const d = dist({ x: mx, y: my }, { x: agent.x, y: agent.y });
+      if (d < SPRITE_SIZE) {
+        found = agent.id;
+        break;
+      }
+    }
+    hoveredAgentRef.current = found;
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    mouseCanvasRef.current = null;
+    hoveredAgentRef.current = null;
+  }, []);
+
   // Click handler — sprite clicks → dialogue, station clicks → interior
   const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -1303,6 +1348,8 @@ export default function AgentOffice() {
         width={CANVAS_W}
         height={CANVAS_H}
         onClick={handleClick}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
         style={{
           position: "absolute",
           top: 0,
