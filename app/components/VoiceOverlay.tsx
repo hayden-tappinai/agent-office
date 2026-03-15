@@ -228,14 +228,14 @@ function MicButton({
       disabled={connecting}
       style={{
         position: "fixed",
-        top: "30%",
+        top: 12,
         left: "50%",
         transform: "translateX(-50%)",
-        width: 64,
-        height: 64,
+        width: 80,
+        height: 80,
         zIndex: 1100,
         border: `2px solid ${connecting ? "#FF8C42" : listening ? "#2563EB" : "#3a5a7a"}`,
-        borderRadius: 8,
+        borderRadius: 10,
         background: "transparent",
         cursor: connecting ? "wait" : "pointer",
         padding: 0,
@@ -265,8 +265,8 @@ function MicButton({
       <img
         src={micSrc}
         alt={listening ? "Microphone on" : "Microphone off"}
-        width={60}
-        height={60}
+        width={76}
+        height={76}
         style={{
           imageRendering: "pixelated",
           display: "block",

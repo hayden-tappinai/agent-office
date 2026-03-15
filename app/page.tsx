@@ -1019,16 +1019,20 @@ export default function AgentOffice() {
             : agent.sprite;
 
           // BEFORE drawing the sprite, draw a solid white disc
+          const circleRadius = SPRITE_SIZE * 0.45;
           ctx.save();
           ctx.fillStyle = '#FFFFFF';
           ctx.globalAlpha = 1.0;
           ctx.beginPath();
-          ctx.arc(agent.x, agent.y + bob, SPRITE_SIZE * 0.45, 0, Math.PI * 2);
+          ctx.arc(agent.x, agent.y + bob, circleRadius, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
 
-          // Draw actual sprite on top
+          // Draw actual sprite clipped to the same circle
           ctx.save();
+          ctx.beginPath();
+          ctx.arc(agent.x, agent.y + bob, circleRadius, 0, Math.PI * 2);
+          ctx.clip();
           if (agent.direction === "left") {
             ctx.translate(agent.x, agent.y + bob - SPRITE_SIZE / 2);
             ctx.scale(-1, 1);
