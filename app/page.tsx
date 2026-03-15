@@ -1465,23 +1465,6 @@ export default function AgentOffice() {
               </div>
             )}
 
-            {/* Agent sprite overlay */}
-            <img
-              src={`/sprites/${interior.agentId}.png`}
-              alt={interior.agentId.toUpperCase()}
-              style={{
-                position: "absolute",
-                left: "50%",
-                top: "50%",
-                transform: "translate(-50%, -30%)",
-                width: SPRITE_SIZE * 1.5,
-                height: SPRITE_SIZE * 1.5,
-                imageRendering: "pixelated",
-                pointerEvents: "none",
-                zIndex: 2,
-              }}
-            />
-
             {/* Close button */}
             <button
               onClick={(e) => { e.stopPropagation(); closeInterior(); }}
